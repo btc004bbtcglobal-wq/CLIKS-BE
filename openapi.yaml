@@ -1,0 +1,747 @@
+openapi: 3.1.0
+info:
+  title: Books & Finance API
+  version: 1.0.0
+  description: |
+    Personal finance and books management REST API.
+
+    **Base URL:** `http://localhost:8000/api/v1`
+
+    **Authentication:** Bearer JWT token. Obtain via `POST /auth/login`.
+    Tokens expire in **7 days**.
+
+    **Default credentials:** `BTC007` / `password123`
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Development server
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+        message:
+          type: string
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+
+    PaginationMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        totalPages:
+          type: integer
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        email:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Account:
+      type: object
+      properties:
+        id: { type: integer }
+        user_id: { type: integer }
+        name: { type: string }
+        type: { type: string }
+        balance: { type: number }
+        notes: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    Transaction:
+      type: object
+      properties:
+        id: { type: integer }
+        user_id: { type: integer }
+        type: { type: string }
+        amount: { type: number }
+        date: { type: string, format: date }
+        description: { type: string }
+        category: { type: string }
+        created_at: { type: string, format: date-time }
+
+    FinancialPlan:
+      type: object
+      properties:
+        id: { type: integer }
+        user_id: { type: integer }
+        title: { type: string }
+        description: { type: string }
+        start_date: { type: string, format: date }
+        end_date: { type: string, format: date }
+        status:
+          type: string
+          enum: [draft, active, completed, archived]
+        created_at: { type: string, format: date-time }
+
+    SplitExpense:
+      type: object
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        total_amount: { type: number }
+        date: { type: string, format: date }
+        notes: { type: string }
+        participants:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: integer }
+              name: { type: string }
+              share_amount: { type: number }
+              is_settled: { type: integer, enum: [0, 1] }
+
+    PublicPost:
+      type: object
+      properties:
+        id: { type: integer }
+        content: { type: string }
+        type:
+          type: string
+          enum: [update, tip, goal, achievement]
+        likes: { type: integer }
+        created_at: { type: string, format: date-time }
+        author:
+          type: object
+          properties:
+            username: { type: string }
+
+  parameters:
+    page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    sort:
+      name: sort
+      in: query
+      schema: { type: string, default: created_at }
+    order:
+      name: order
+      in: query
+      schema: { type: string, enum: [asc, desc], default: desc }
+    search:
+      name: search
+      in: query
+      schema: { type: string }
+    from:
+      name: from
+      in: query
+      schema: { type: string, format: date }
+    to:
+      name: to
+      in: query
+      schema: { type: string, format: date }
+
+security:
+  - bearerAuth: []
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      security: []
+      tags: [System]
+      responses:
+        '200':
+          description: Server is running
+          content:
+            application/json:
+              example:
+                success: true
+                data: { status: ok, timestamp: "2024-01-15T10:30:00.000Z" }
+
+  /auth/register:
+    post:
+      summary: Register a new user
+      security: []
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, email, password]
+              properties:
+                username:
+                  type: string
+                  maxLength: 50
+                  example: john_doe
+                email:
+                  type: string
+                  format: email
+                  example: john@example.com
+                password:
+                  type: string
+                  minLength: 6
+                  example: secret123
+      responses:
+        '201':
+          description: Account created
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  token: eyJhbGci...
+                  user: { id: 2, username: john_doe, email: john@example.com }
+                message: Account created successfully
+        '409':
+          description: Email or username already exists
+
+  /auth/login:
+    post:
+      summary: Login and receive a JWT token
+      security: []
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: btc007@books.local
+                username:
+                  type: string
+                  example: BTC007
+                password:
+                  type: string
+                  example: password123
+            examples:
+              byEmail:
+                summary: Login by email
+                value: { email: btc007@books.local, password: password123 }
+              byUsername:
+                summary: Login by username
+                value: { username: BTC007, password: password123 }
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  token: eyJhbGci...
+                  expiresIn: 7d
+                  user: { id: 1, username: BTC007, email: btc007@books.local }
+                message: Logged in successfully
+        '401':
+          description: Invalid credentials
+
+  /profile:
+    get:
+      summary: Get current user profile
+      tags: [Profile]
+      responses:
+        '200':
+          description: Current user (no password)
+          content:
+            application/json:
+              example:
+                success: true
+                data: { id: 1, username: BTC007, email: btc007@books.local, created_at: "2024-01-01T00:00:00Z" }
+    patch:
+      summary: Update username or email
+      tags: [Profile]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username: { type: string }
+                email: { type: string, format: email }
+            example: { username: new_name }
+      responses:
+        '200':
+          description: Profile updated
+        '409':
+          description: Email already in use
+
+  /profile/change-password:
+    patch:
+      summary: Change password
+      tags: [Profile]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword: { type: string }
+                newPassword: { type: string, minLength: 6 }
+      responses:
+        '200':
+          description: Password updated
+        '401':
+          description: Current password incorrect
+
+  /home:
+    get:
+      summary: Financial dashboard summary
+      tags: [Home]
+      responses:
+        '200':
+          description: Aggregated financial overview
+
+  /accounts:
+    get:
+      summary: List accounts
+      tags: [Accounts]
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/search'
+      responses:
+        '200':
+          description: List of accounts
+    post:
+      summary: Create account
+      tags: [Accounts]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, type]
+              properties:
+                name: { type: string, example: Main Wallet }
+                type: { type: string, example: bank }
+                balance: { type: number, example: 5000 }
+                notes: { type: string }
+      responses:
+        '201':
+          description: Account created
+
+  /accounts/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer }
+    get:
+      summary: Get account
+      tags: [Accounts]
+      responses:
+        '200': { description: Account found }
+        '404': { description: Not found }
+    patch:
+      summary: Update account
+      tags: [Accounts]
+      requestBody:
+        content:
+          application/json:
+            example: { name: Updated Name, balance: 7500 }
+      responses:
+        '200': { description: Updated }
+    delete:
+      summary: Delete account
+      tags: [Accounts]
+      responses:
+        '204': { description: Deleted }
+
+  /transactions:
+    get:
+      summary: List transactions
+      tags: [Transactions]
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+        - $ref: '#/components/parameters/search'
+      responses:
+        '200': { description: List of transactions }
+    post:
+      summary: Create transaction
+      tags: [Transactions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, amount, date]
+              properties:
+                type: { type: string, example: debit }
+                amount: { type: number, example: 250.00 }
+                date: { type: string, format: date, example: "2024-01-15" }
+                description: { type: string }
+                category: { type: string }
+      responses:
+        '201': { description: Transaction created }
+
+  /income:
+    get:
+      summary: List income records
+      tags: [Income]
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+      responses:
+        '200': { description: Income list }
+    post:
+      summary: Add income
+      tags: [Income]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              source: Freelance
+              amount: 1500.00
+              date: "2024-01-15"
+              category: consulting
+      responses:
+        '201': { description: Income created }
+
+  /expenses:
+    get:
+      summary: List expenses
+      tags: [Expenses]
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+      responses:
+        '200': { description: Expenses list }
+    post:
+      summary: Add expense
+      tags: [Expenses]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              category: Food
+              amount: 45.00
+              date: "2024-01-15"
+              description: Dinner
+      responses:
+        '201': { description: Expense created }
+
+  /stock:
+    get:
+      summary: List stock items
+      tags: [Stock]
+      parameters:
+        - $ref: '#/components/parameters/search'
+        - name: category
+          in: query
+          schema: { type: string }
+        - name: location
+          in: query
+          schema: { type: string }
+      responses:
+        '200': { description: Stock list }
+    post:
+      summary: Create stock item
+      tags: [Stock]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              name: The Great Gatsby
+              sku: BOOK-001
+              quantity: 50
+              unit_price: 12.99
+              category: Fiction
+              location: Shelf A3
+      responses:
+        '201': { description: Stock item created }
+
+  /stock/{id}/adjust-quantity:
+    patch:
+      summary: Adjust stock quantity by delta
+      tags: [Stock]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [delta]
+              properties:
+                delta:
+                  type: integer
+                  description: Positive to add, negative to subtract. Quantity cannot go below 0.
+                  example: -5
+      responses:
+        '200': { description: Quantity adjusted }
+        '400': { description: Would result in negative quantity }
+
+  /financial-plans:
+    get:
+      summary: List financial plans
+      tags: [Financial Plans]
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/limit'
+        - name: status
+          in: query
+          schema: { type: string, enum: [draft, active, completed, archived] }
+      responses:
+        '200': { description: Plans list }
+    post:
+      summary: Create financial plan
+      tags: [Financial Plans]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              title: Q1 2024 Budget Plan
+              description: Quarterly budget allocation
+              start_date: "2024-01-01"
+              end_date: "2024-03-31"
+              status: active
+      responses:
+        '201': { description: Plan created }
+
+  /financial-plans/calendar:
+    get:
+      summary: Upcoming financial events calendar
+      tags: [Financial Plans]
+      parameters:
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+      responses:
+        '200':
+          description: Sorted list of upcoming events
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  - type: payment
+                    title: Rent
+                    date: "2024-02-01"
+                    amount: 1200
+                    id: "3"
+                    reference_id: "3"
+                  - type: goal_deadline
+                    title: Emergency Fund
+                    date: "2024-03-31"
+                    amount: 5000
+                    id: "1"
+                    reference_id: "2"
+
+  /financial-plans/{planId}/analysis:
+    get:
+      summary: Aggregated income/budget/expense totals for a plan
+      tags: [Financial Plans]
+      parameters:
+        - name: planId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Plan financial analysis
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  total_expected_income: 5000
+                  total_actual_income: 4200
+                  total_allocated_budget: 4500
+                  total_spent_budget: 3800
+                  total_expected_expenses: 3000
+                  total_actual_expenses: 2750
+
+  /split-expenses:
+    get:
+      summary: List split expenses
+      tags: [Split Expenses]
+      responses:
+        '200': { description: Split expenses list }
+    post:
+      summary: Create split expense with participants
+      tags: [Split Expenses]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              title: Team Dinner
+              total_amount: 120.00
+              date: "2024-01-20"
+              notes: Restaurant bill
+              participants:
+                - name: Alice
+                  share_amount: 40.00
+                - name: Bob
+                  share_amount: 40.00
+                - name: Charlie
+                  share_amount: 40.00
+      responses:
+        '201': { description: Split expense created }
+        '400':
+          description: Participant shares do not sum to total_amount
+
+  /split-expenses/{id}/participants/{participantId}/settle:
+    patch:
+      summary: Mark a participant as settled
+      tags: [Split Expenses]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: participantId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: Participant settled }
+
+  /segregation:
+    get:
+      summary: List segregation rules
+      tags: [Segregation]
+      responses:
+        '200': { description: Rules list }
+    post:
+      summary: Create segregation rule
+      tags: [Segregation]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              name: 50/30/20 Rule
+              rule_type: percentage
+              description: Standard budget allocation rule
+              allocations:
+                - label: Needs
+                  percentage: 50
+                - label: Wants
+                  percentage: 30
+                - label: Savings
+                  percentage: 20
+      responses:
+        '201': { description: Rule created }
+        '400': { description: Allocations do not sum to 100% }
+
+  /public:
+    get:
+      summary: Public feed (no auth)
+      security: []
+      tags: [Public Feed]
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/limit'
+        - name: type
+          in: query
+          schema: { type: string, enum: [update, tip, goal, achievement] }
+      responses:
+        '200':
+          description: Public posts
+          content:
+            application/json:
+              example:
+                success: true
+                data:
+                  - id: 1
+                    content: Just hit my savings goal!
+                    type: achievement
+                    likes: 14
+                    created_at: "2024-01-15T12:00:00Z"
+                    author: { username: BTC007 }
+    post:
+      summary: Create public post (auth required)
+      tags: [Public Feed]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example:
+              content: Just saved my first ₹10,000!
+              type: achievement
+      responses:
+        '201': { description: Post created }
+
+  /public/{id}/like:
+    patch:
+      summary: Increment post likes (no auth, rate-limited)
+      security: []
+      tags: [Public Feed]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Updated likes count
+          content:
+            application/json:
+              example:
+                success: true
+                data: { id: 1, likes: 15 }
+        '429': { description: Too many requests }
