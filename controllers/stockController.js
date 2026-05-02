@@ -3,19 +3,21 @@ const { sendSuccess, sendError } = require('../utils/response');
 const { paginate } = require('../utils/pagination');
 
 // ── Helper: derive status from quantity ───────────────────────────────────────
-function deriveStatus(quantity) {
+function deriveStatus(quantity, threshold = 5) {
   if (quantity === 0) return 'Out of Stock';
-  if (quantity < 5) return 'Low Stock';
+  if (quantity < threshold) return 'Low Stock';
   return 'In Stock';
 }
 
 // ── Helper: enrich a stock row with computed fields ──────────────────────────
 function enrichRow(row) {
   if (!row) return row;
+  const low_stock_threshold = Number(row.low_stock_threshold || row.lowstockthreshold || row.lowStockThreshold || row.low_stock_threshold || 5);
   return {
     ...row,
-    status: deriveStatus(row.quantity || 0),
-    value: (row.quantity || 0) * (row.unit_price || 0),
+    low_stock_threshold,
+    status: deriveStatus(Number(row.quantity || 0), low_stock_threshold),
+    value: Number(row.quantity || 0) * Number(row.unit_price || 0),
   };
 }
 
@@ -115,9 +117,12 @@ const updateStock = async (req, res) => {
   const allowedFields = ['name', 'sku', 'quantity', 'unit', 'unit_price', 'category', 'location', 'notes', 'low_stock_threshold'];
   
   for (const field of allowedFields) {
-    if (req.body[field] !== undefined) {
+    let val = req.body[field];
+    if (field === 'low_stock_threshold' && val === undefined) {
+      val = req.body.low_stock_threshold !== undefined ? req.body.low_stock_threshold : (req.body.lowstockthreshold !== undefined ? req.body.lowstockthreshold : req.body.lowStockThreshold);
+    }
+    if (val !== undefined) {
       updates.push(`${field} = ?`);
-      let val = req.body[field];
       if (field === 'quantity' || field === 'unit_price' || field === 'low_stock_threshold') val = Number(val);
       params.push(val);
     }
