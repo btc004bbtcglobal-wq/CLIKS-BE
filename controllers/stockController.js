@@ -73,17 +73,18 @@ const getStocks = async (req, res) => {
 
 // ── POST / ────────────────────────────────────────────────────────────────────
 const createStock = async (req, res) => {
-  const { name, sku, quantity = 0, unit, unit_price, category, location, notes } = req.body;
+  const { name, sku, quantity = 0, unit, unit_price, category, location, notes, low_stock_threshold } = req.body;
   if (!name) return sendError(res, 'Name is required', 400, 'BAD_REQUEST');
 
   const now = new Date().toISOString();
   const qty = Number(quantity || 0);
   const price = Number(unit_price || 0);
+  const threshold = low_stock_threshold !== undefined ? Number(low_stock_threshold) : 5;
   const stmt = db.prepare(`
-    INSERT INTO stock (user_id, name, sku, quantity, unit, unit_price, category, location, notes, created_at, updated_at) 
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO stock (user_id, name, sku, quantity, unit, unit_price, category, location, notes, low_stock_threshold, created_at, updated_at) 
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
-  const info = await stmt.run(req.user.id, name, sku || null, qty, unit || null, price || null, category || null, location || null, notes || null, now, now);
+  const info = await stmt.run(req.user.id, name, sku || null, qty, unit || null, price || null, category || null, location || null, notes || null, threshold, now, now);
   
   const newItem = await db.prepare('SELECT * FROM stock WHERE id = ?').get(info.lastInsertRowid);
   
@@ -105,18 +106,19 @@ const getStock = async (req, res) => {
 
 // ── PATCH /:id ────────────────────────────────────────────────────────────────
 const updateStock = async (req, res) => {
+  console.log('Update stock request body:', req.body);
   const item = await db.prepare('SELECT * FROM stock WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
   if (!item) return sendError(res, 'Stock item not found', 404, 'NOT_FOUND');
 
   const updates = [];
   const params = [];
-  const allowedFields = ['name', 'sku', 'quantity', 'unit', 'unit_price', 'category', 'location', 'notes'];
+  const allowedFields = ['name', 'sku', 'quantity', 'unit', 'unit_price', 'category', 'location', 'notes', 'low_stock_threshold'];
   
   for (const field of allowedFields) {
     if (req.body[field] !== undefined) {
       updates.push(`${field} = ?`);
       let val = req.body[field];
-      if (field === 'quantity' || field === 'unit_price') val = Number(val);
+      if (field === 'quantity' || field === 'unit_price' || field === 'low_stock_threshold') val = Number(val);
       params.push(val);
     }
   }

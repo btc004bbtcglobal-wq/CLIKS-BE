@@ -101,4 +101,78 @@ const updateWidgets = async (req, res) => {
   return sendSuccess(res, widgets, 'Widgets updated');
 };
 
-module.exports = { getDashboard, getWidgets, updateWidgets };
+const getBooksDashboard = async (req, res) => {
+  const userId = req.user.id;
+  console.log('Books Dashboard requested for user:', userId);
+
+  // Stock / Assets info
+  const stockInfo = await db.prepare(
+    `SELECT COUNT(*) as totalItems, COUNT(*) as totalitems, COALESCE(SUM(quantity * unit_price), 0) as totalValue, COALESCE(SUM(quantity * unit_price), 0) as totalvalue FROM stock WHERE user_id = ?`
+  ).get(userId);
+  console.log('Stock query result:', stockInfo);
+
+  // Fallback / Combine with Inventory table too
+  const invInfo = await db.prepare(
+    `SELECT COUNT(*) as totalItems, COUNT(*) as totalitems, COALESCE(SUM(quantity * price), 0) as totalValue, COALESCE(SUM(quantity * price), 0) as totalvalue FROM inventory WHERE user_id = ?`
+  ).get(userId);
+  console.log('Inventory query result:', invInfo);
+
+  const totalItems = Number(stockInfo?.totalItems || stockInfo?.totalitems || 0) +
+                     Number(invInfo?.totalItems || invInfo?.totalitems || 0);
+
+  const totalValue = Number(stockInfo?.totalValue || stockInfo?.totalvalue || 0) +
+                     Number(invInfo?.totalValue || invInfo?.totalvalue || 0);
+
+  // Financial Plans info
+  const plansInfo = await db.prepare(
+    `SELECT COUNT(*) as total FROM financial_plans WHERE user_id = ?`
+  ).get(userId);
+  console.log('Plans query result:', plansInfo);
+
+  // People info
+  const peopleInfo = await db.prepare(
+    `SELECT COUNT(*) as total FROM people WHERE user_id = ?`
+  ).get(userId);
+  console.log('People query result:', peopleInfo);
+
+  // Goal Wallets info
+  const walletsInfo = await db.prepare(
+    `SELECT COUNT(*) as total, COALESCE(SUM(current_amount), 0) as saved FROM goal_wallets WHERE user_id = ?`
+  ).get(userId);
+  console.log('Wallets query result:', walletsInfo);
+
+  // Split Expenses info
+  const splitsInfo = await db.prepare(
+    `SELECT COUNT(*) as total, COALESCE(SUM(total_amount), 0) as totalAmount, COALESCE(SUM(total_amount), 0) as totalamount FROM split_expenses WHERE user_id = ?`
+  ).get(userId);
+  console.log('Splits query result:', splitsInfo);
+
+  // Recent Stock items for display
+  const recentStock = await db.prepare(
+    `SELECT * FROM stock WHERE user_id = ? ORDER BY created_at DESC LIMIT 5`
+  ).all(userId);
+
+  return sendSuccess(res, {
+    stock: {
+      totalItems,
+      totalValue,
+    },
+    plans: {
+      total: Number(plansInfo?.total || plansInfo?.Total || 0),
+    },
+    people: {
+      total: Number(peopleInfo?.total || peopleInfo?.Total || 0),
+    },
+    wallets: {
+      total: Number(walletsInfo?.total || walletsInfo?.Total || 0),
+      saved: Number(walletsInfo?.saved || walletsInfo?.Saved || 0),
+    },
+    splits: {
+      total: Number(splitsInfo?.total || splitsInfo?.Total || 0),
+      totalAmount: Number(splitsInfo?.totalAmount || splitsInfo?.totalamount || 0),
+    },
+    recentStock
+  });
+};
+
+module.exports = { getDashboard, getWidgets, updateWidgets, getBooksDashboard };

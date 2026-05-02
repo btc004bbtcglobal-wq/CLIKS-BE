@@ -171,6 +171,7 @@ CREATE TABLE IF NOT EXISTS stock (
   category TEXT,
   location TEXT,
   notes TEXT,
+  low_stock_threshold INTEGER DEFAULT 5,
   created_at TEXT,
   updated_at TEXT,
   FOREIGN KEY(user_id) REFERENCES users(id)
@@ -542,6 +543,7 @@ CREATE TABLE IF NOT EXISTS business_invoices (
       'ALTER TABLE users ADD COLUMN IF NOT EXISTS industry TEXT;',
       'ALTER TABLE users ADD COLUMN IF NOT EXISTS settings TEXT;',
       'ALTER TABLE stock ADD COLUMN IF NOT EXISTS unit TEXT;',
+      'ALTER TABLE stock ADD COLUMN IF NOT EXISTS low_stock_threshold INTEGER DEFAULT 5;',
       'ALTER TABLE people_records ADD COLUMN IF NOT EXISTS type TEXT;',
       'ALTER TABLE people_records ADD COLUMN IF NOT EXISTS description TEXT;',
       'ALTER TABLE people ADD COLUMN IF NOT EXISTS relationship TEXT;',
@@ -600,6 +602,7 @@ CREATE TABLE IF NOT EXISTS business_invoices (
       'ALTER TABLE users ADD COLUMN widgets TEXT',
       'ALTER TABLE users ADD COLUMN settings TEXT',
       'ALTER TABLE stock ADD COLUMN unit TEXT',
+      'ALTER TABLE stock ADD COLUMN low_stock_threshold INTEGER DEFAULT 5',
       'ALTER TABLE people_records ADD COLUMN type TEXT',
       'ALTER TABLE people_records ADD COLUMN description TEXT',
       'ALTER TABLE people ADD COLUMN relationship TEXT',

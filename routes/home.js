@@ -1,10 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const cache = require('../middleware/cache');
-const { getDashboard, getWidgets, updateWidgets } = require('../controllers/homeController');
+const { getDashboard, getWidgets, updateWidgets, getBooksDashboard } = require('../controllers/homeController');
 
 // GET  /home           — Get full dashboard summary (balance, income, expenses, savings, debts, investments)
 router.get('/', cache(30), getDashboard);
+
+// GET  /home/books     — Get Books-specific dashboard data
+router.get('/books', getBooksDashboard);
 
 // GET  /home/summary   — Alias for the dashboard summary (same data)
 router.get('/summary', cache(30), getDashboard);
