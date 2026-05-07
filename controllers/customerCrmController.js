@@ -51,27 +51,67 @@ try {
 
 const customerCrmController = {
 
-    // 1. Create Customer
+    // 1. Create Customer (Full CRM Fields)
     createCustomer: async (req, res) => {
-        const { name, email, phone, company, status, notes, city, outstanding_balance, total_spent } = req.body;
+        const {
+            name, email, phone, phone_number, company, business_name, contact_person,
+            customer_code, alternate_phone, website, customer_type,
+            gstin, pan_number, tax_type, place_of_supply,
+            status, notes, city, state, pincode,
+            billing_address, shipping_address,
+            opening_balance, current_balance, credit_limit, due_days,
+            outstanding_balance, total_spent,
+            reminder_enabled, preferred_contact
+        } = req.body;
         if (!name) return sendError(res, 'Name is required', 400);
 
         try {
             const now = new Date().toISOString();
             const result = await db.prepare(`
-                INSERT INTO business_customers (user_id, name, email, phone, company, status, notes, city, outstanding_balance, total_spent, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO business_customers (
+                    user_id, customer_code, name, business_name, contact_person,
+                    email, phone, phone_number, alternate_phone, website,
+                    customer_type, gstin, pan_number, tax_type, place_of_supply,
+                    company, status, notes, city, state, pincode,
+                    billing_address, shipping_address,
+                    opening_balance, current_balance, credit_limit, due_days,
+                    outstanding_balance, total_spent,
+                    reminder_enabled, preferred_contact,
+                    created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `).run(
                 req.user.id,
+                customer_code || null,
                 name,
+                business_name || company || null,
+                contact_person || null,
                 email || null,
-                phone || null,
-                company || null,
-                status || 'lead',
+                phone || phone_number || null,
+                phone_number || phone || null,
+                alternate_phone || null,
+                website || null,
+                customer_type || 'retail',
+                gstin || null,
+                pan_number || null,
+                tax_type || 'unregistered',
+                place_of_supply || null,
+                company || business_name || null,
+                status || 'active',
                 notes || null,
                 city || null,
+                state || null,
+                pincode || null,
+                billing_address || null,
+                shipping_address || null,
+                opening_balance || 0,
+                current_balance || 0,
+                credit_limit || 0,
+                due_days || 30,
                 outstanding_balance || 0,
                 total_spent || 0,
+                reminder_enabled !== undefined ? reminder_enabled : false,
+                preferred_contact || 'WhatsApp',
                 now,
                 now
             );
@@ -133,10 +173,10 @@ const customerCrmController = {
         }
     },
 
-    // 4. Update Customer
+    // 4. Update Customer (Full CRM Fields)
     updateCustomer: async (req, res) => {
         const { id } = req.params;
-        const { name, email, phone, company, status, notes, city, outstanding_balance, total_spent } = req.body;
+        const body = req.body;
 
         try {
             const existing = await db.prepare('SELECT * FROM business_customers WHERE id = ? AND user_id = ?').get(id, req.user.id);
@@ -145,15 +185,24 @@ const customerCrmController = {
             const updates = [];
             const params = [];
 
-            if (name !== undefined) { updates.push('name = ?'); params.push(name); }
-            if (email !== undefined) { updates.push('email = ?'); params.push(email); }
-            if (phone !== undefined) { updates.push('phone = ?'); params.push(phone); }
-            if (company !== undefined) { updates.push('company = ?'); params.push(company); }
-            if (status !== undefined) { updates.push('status = ?'); params.push(status); }
-            if (notes !== undefined) { updates.push('notes = ?'); params.push(notes); }
-            if (city !== undefined) { updates.push('city = ?'); params.push(city); }
-            if (outstanding_balance !== undefined) { updates.push('outstanding_balance = ?'); params.push(outstanding_balance); }
-            if (total_spent !== undefined) { updates.push('total_spent = ?'); params.push(total_spent); }
+            const updatableFields = [
+                'name', 'email', 'phone', 'phone_number', 'alternate_phone',
+                'company', 'business_name', 'contact_person', 'customer_code',
+                'website', 'customer_type', 'gstin', 'pan_number',
+                'tax_type', 'place_of_supply', 'status', 'notes',
+                'city', 'state', 'pincode',
+                'billing_address', 'shipping_address',
+                'opening_balance', 'current_balance', 'credit_limit', 'due_days',
+                'outstanding_balance', 'total_spent',
+                'reminder_enabled', 'preferred_contact'
+            ];
+
+            for (const field of updatableFields) {
+                if (body[field] !== undefined) {
+                    updates.push(`${field} = ?`);
+                    params.push(body[field]);
+                }
+            }
 
             if (updates.length === 0) return sendError(res, 'No fields to update', 400);
 
