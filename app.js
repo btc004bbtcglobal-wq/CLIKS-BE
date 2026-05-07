@@ -138,11 +138,30 @@ app.use('/api/v1/split-expenses',   auth, require('./routes/splitExpense'));
 app.use('/api/v1/business',         auth, require('./routes/business'));
 app.use('/api/v1/inventory',        auth, require('./routes/inventory'));
 app.use('/api/v1/billing',          auth, require('./routes/billing'));
-app.use('/api/v1/crm',              auth, require('./routes/crm'));
+app.use('/api/v1/crm',              auth, require('./routes/customers'));
+app.use('/api/v1/customers',        auth, require('./routes/customers'));
+app.use('/api/v1/orders',           auth, require('./routes/orders'));
+app.use('/api/v1/returns',          auth, require('./routes/returns'));
+app.use('/api/v1/purchases',        auth, require('./routes/purchases'));
+app.use('/api/v1/suppliers',        auth, require('./routes/suppliers'));
+app.use('/api/v1/products',         auth, require('./routes/products'));
 app.use('/api/v1/staffing',         auth, require('./routes/staffing'));
 app.use('/api/v1/business-plans',   auth, require('./routes/businessFinancialPlan'));
 app.use('/api/v1/business-segregation', auth, require('./routes/businessSegregation'));
 app.use('/api/v1/business-compare',     auth, require('./routes/businessCompare'));
+
+// New Business/ERP Modules
+app.use('/api/v1/manufacturing', auth, require('./routes/manufacturing'));
+app.use('/api/v1/bom',           auth, require('./routes/bom'));
+app.use('/api/v1/payroll',       auth, require('./routes/payroll'));
+
+app.use('/api/v1/attendance',    auth, require('./routes/attendance'));
+app.use('/api/v1/employees',     auth, require('./routes/employees'));
+app.use('/api/v1/gst',           auth, require('./routes/gst'));
+app.use('/api/v1/payments',      auth, require('./routes/payments'));
+app.use('/api/v1/warehouses',    auth, require('./routes/warehouses'));
+app.use('/api/v1/returns',       auth, require('./routes/returns'));
+app.use('/api/v1/suppliers',     auth, require('./routes/suppliers'));
 
 // ── 404 Handler ───────────────────────────────────────────────────────────────
 app.use((req, res) => {

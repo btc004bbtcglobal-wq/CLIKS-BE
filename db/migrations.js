@@ -517,12 +517,725 @@ CREATE TABLE IF NOT EXISTS business_invoices (
   invoice_number TEXT NOT NULL,
   client_name TEXT NOT NULL,
   client_email TEXT,
+  client_gstin TEXT,
+  billing_address TEXT,
+  shipping_address TEXT,
   amount REAL DEFAULT 0,
+  tax_amount REAL DEFAULT 0,
+  total_amount REAL DEFAULT 0,
+  paid_amount REAL DEFAULT 0,
+  due_amount REAL DEFAULT 0,
+  bank_account_id TEXT,
+  discount_amount REAL DEFAULT 0,
+  round_off REAL DEFAULT 0,
   status TEXT DEFAULT 'Draft',
   due_date TEXT,
+  payment_mode TEXT,
+  invoice_type TEXT,
+  tax_type TEXT,
   items TEXT, -- JSON string
   created_at TEXT,
   updated_at TEXT,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Business Customers
+CREATE TABLE IF NOT EXISTS business_customers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  email TEXT,
+  phone TEXT,
+  company TEXT,
+  status TEXT DEFAULT 'lead',
+  notes TEXT,
+  city TEXT,
+  outstanding_balance REAL DEFAULT 0,
+  total_spent REAL DEFAULT 0,
+  created_at TEXT,
+  updated_at TEXT,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Customer Addresses
+CREATE TABLE IF NOT EXISTS customer_addresses (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  customer_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  address_line1 TEXT,
+  address_line2 TEXT,
+  city TEXT,
+  state TEXT,
+  postal_code TEXT,
+  country TEXT,
+  created_at TEXT,
+  FOREIGN KEY(customer_id) REFERENCES business_customers(id) ON DELETE CASCADE,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Customer Notes
+CREATE TABLE IF NOT EXISTS customer_notes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  customer_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  note TEXT NOT NULL,
+  created_at TEXT,
+  FOREIGN KEY(customer_id) REFERENCES business_customers(id) ON DELETE CASCADE,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Customer Payments
+CREATE TABLE IF NOT EXISTS customer_payments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  customer_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  amount REAL DEFAULT 0,
+  payment_method TEXT,
+  reference_number TEXT,
+  created_at TEXT,
+  FOREIGN KEY(customer_id) REFERENCES business_customers(id) ON DELETE CASCADE,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Customer Ledger
+CREATE TABLE IF NOT EXISTS customer_ledger (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  customer_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  description TEXT,
+  amount REAL DEFAULT 0,
+  type TEXT, -- debit (invoice/charge), credit (payment)
+  created_at TEXT,
+  FOREIGN KEY(customer_id) REFERENCES business_customers(id) ON DELETE CASCADE,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Customer Documents
+CREATE TABLE IF NOT EXISTS customer_documents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  customer_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  file_name TEXT NOT NULL,
+  file_url TEXT,
+  file_size TEXT,
+  created_at TEXT,
+  FOREIGN KEY(customer_id) REFERENCES business_customers(id) ON DELETE CASCADE,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Business Employees
+CREATE TABLE IF NOT EXISTS business_employees (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  role TEXT,
+  email TEXT,
+  phone TEXT,
+  salary REAL DEFAULT 0,
+  status TEXT DEFAULT 'active',
+  hire_date TEXT,
+  created_at TEXT,
+  updated_at TEXT,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Business Plans
+CREATE TABLE IF NOT EXISTS business_plans (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT,
+  start_date TEXT,
+  end_date TEXT,
+  total_budget REAL DEFAULT 0,
+  status TEXT DEFAULT 'Draft',
+  created_at TEXT,
+  updated_at TEXT,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Business Plan Items
+CREATE TABLE IF NOT EXISTS business_plan_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  plan_id INTEGER NOT NULL,
+  type TEXT, -- revenue, expense, capex
+  category TEXT,
+  description TEXT,
+  amount REAL DEFAULT 0,
+  date TEXT,
+  created_at TEXT,
+  FOREIGN KEY(plan_id) REFERENCES business_plans(id) ON DELETE CASCADE
+);
+
+-- Employees Table
+CREATE TABLE IF NOT EXISTS employees (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  role TEXT,
+  email TEXT,
+  phone TEXT,
+  salary REAL DEFAULT 0,
+  status TEXT DEFAULT 'active',
+  hire_date TEXT,
+  created_at TEXT,
+  updated_at TEXT,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Manufacturing BOM (Bill of Materials)
+CREATE TABLE IF NOT EXISTS manufacturing_boms (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT,
+  items TEXT, -- JSON string of components
+  created_at TEXT,
+  updated_at TEXT,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Manufacturing Orders
+CREATE TABLE IF NOT EXISTS manufacturing_orders (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  bom_id INTEGER,
+  product_name TEXT NOT NULL,
+  quantity INTEGER DEFAULT 1,
+  status TEXT DEFAULT 'Pending', -- Pending | In Progress | Completed
+  created_at TEXT,
+  updated_at TEXT,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Payroll Table
+CREATE TABLE IF NOT EXISTS payroll (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  employee_id INTEGER NOT NULL,
+  amount REAL NOT NULL,
+  month TEXT,
+  status TEXT DEFAULT 'Pending', -- Pending | Processed
+  created_at TEXT,
+  updated_at TEXT,
+  FOREIGN KEY(user_id) REFERENCES users(id),
+  FOREIGN KEY(employee_id) REFERENCES employees(id)
+);
+
+-- Attendance Table
+CREATE TABLE IF NOT EXISTS attendance (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  employee_id INTEGER,
+  date TEXT,
+  check_in TEXT,
+  check_out TEXT,
+  status TEXT DEFAULT 'Present',
+  created_at TEXT,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- GST Invoices
+CREATE TABLE IF NOT EXISTS gst_invoices (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  invoice_number TEXT NOT NULL,
+  client_name TEXT NOT NULL,
+  amount REAL DEFAULT 0,
+  gst_amount REAL DEFAULT 0,
+  eway_bill_number TEXT,
+  created_at TEXT,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Business Payments Table
+CREATE TABLE IF NOT EXISTS business_payments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  type TEXT, -- receive, pay
+  supplier_id INTEGER,
+  amount REAL DEFAULT 0,
+  status TEXT DEFAULT 'Completed',
+  created_at TEXT,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Warehouses
+CREATE TABLE IF NOT EXISTS warehouses (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  location TEXT,
+  created_at TEXT,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Warehouse Transfers
+CREATE TABLE IF NOT EXISTS warehouse_transfers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  from_warehouse_id INTEGER,
+  to_warehouse_id INTEGER,
+  stock_id INTEGER,
+  quantity REAL DEFAULT 0,
+  created_at TEXT,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Product Returns
+CREATE TABLE IF NOT EXISTS product_returns (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  product_name TEXT NOT NULL,
+  amount REAL DEFAULT 0,
+  status TEXT DEFAULT 'Pending', -- Pending | Approved | Refunded
+  created_at TEXT,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Suppliers Table
+CREATE TABLE IF NOT EXISTS suppliers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  email TEXT,
+  phone TEXT,
+  outstanding_balance REAL DEFAULT 0,
+  created_at TEXT,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Supplier Ledger
+CREATE TABLE IF NOT EXISTS supplier_ledger (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  supplier_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  description TEXT,
+  amount REAL DEFAULT 0,
+  type TEXT, -- debit, credit
+  created_at TEXT,
+  FOREIGN KEY(supplier_id) REFERENCES suppliers(id) ON DELETE CASCADE,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Business Orders
+CREATE TABLE IF NOT EXISTS business_orders (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  customer_id INTEGER,
+  order_number TEXT NOT NULL UNIQUE,
+  customer TEXT NOT NULL,
+  customer_phone TEXT,
+  customer_gstin TEXT,
+  billing_address TEXT,
+  shipping_address TEXT,
+  date TEXT,
+  delivery_date TEXT,
+  status TEXT DEFAULT 'Draft',
+  advance_amount REAL DEFAULT 0,
+  shipping_charge REAL DEFAULT 0,
+  subtotal REAL DEFAULT 0,
+  total_discount REAL DEFAULT 0,
+  total_tax REAL DEFAULT 0,
+  grand_total REAL DEFAULT 0,
+  pending_amount REAL DEFAULT 0,
+  shipping_method TEXT,
+  tracking_number TEXT,
+  dispatch_date TEXT,
+  created_at TEXT,
+  updated_at TEXT,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Business Order Items
+CREATE TABLE IF NOT EXISTS business_order_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  order_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  sku TEXT,
+  hsn TEXT,
+  quantity INTEGER DEFAULT 0,
+  price REAL DEFAULT 0,
+  discount REAL DEFAULT 0,
+  gst INTEGER DEFAULT 0,
+  total REAL DEFAULT 0,
+  FOREIGN KEY(order_id) REFERENCES business_orders(id) ON DELETE CASCADE
+);
+
+-- Business Order Notes
+CREATE TABLE IF NOT EXISTS business_order_notes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  order_id INTEGER NOT NULL,
+  title TEXT,
+  content TEXT,
+  created_at TEXT,
+  FOREIGN KEY(order_id) REFERENCES business_orders(id) ON DELETE CASCADE
+);
+
+-- Business Order Documents
+CREATE TABLE IF NOT EXISTS business_order_documents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  order_id INTEGER NOT NULL,
+  name TEXT,
+  file_path TEXT,
+  created_at TEXT,
+  FOREIGN KEY(order_id) REFERENCES business_orders(id) ON DELETE CASCADE
+);
+
+-- Business Invoice Payments
+CREATE TABLE IF NOT EXISTS business_invoice_payments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  invoice_id INTEGER NOT NULL,
+  amount REAL DEFAULT 0,
+  payment_method TEXT,
+  payment_date TEXT,
+  reference_number TEXT,
+  notes TEXT,
+  FOREIGN KEY(invoice_id) REFERENCES business_invoices(id) ON DELETE CASCADE
+);
+
+-- Business Invoice Returns
+CREATE TABLE IF NOT EXISTS business_invoice_returns (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  invoice_id INTEGER NOT NULL,
+  reason TEXT,
+  amount REAL DEFAULT 0,
+  return_date TEXT,
+  FOREIGN KEY(invoice_id) REFERENCES business_invoices(id) ON DELETE CASCADE
+);
+
+-- Business Invoice Notes
+CREATE TABLE IF NOT EXISTS business_invoice_notes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  invoice_id INTEGER NOT NULL,
+  title TEXT,
+  content TEXT,
+  created_at TEXT,
+  FOREIGN KEY(invoice_id) REFERENCES business_invoices(id) ON DELETE CASCADE
+);
+
+-- Business Invoice Documents
+CREATE TABLE IF NOT EXISTS business_invoice_documents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  invoice_id INTEGER NOT NULL,
+  name TEXT,
+  file_path TEXT,
+  created_at TEXT,
+  FOREIGN KEY(invoice_id) REFERENCES business_invoices(id) ON DELETE CASCADE
+);
+
+-- Business Returns
+CREATE TABLE IF NOT EXISTS business_returns (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  return_number TEXT NOT NULL,
+  return_type TEXT NOT NULL, -- sales, purchase
+  return_date TEXT NOT NULL,
+  status TEXT DEFAULT 'Pending', -- Pending, Completed
+  invoice_id TEXT,
+  purchase_id TEXT,
+  customer_name TEXT,
+  supplier_name TEXT,
+  refund_amount REAL DEFAULT 0,
+  adjustment_amount REAL DEFAULT 0,
+  tax_adjustment REAL DEFAULT 0,
+  refund_mode TEXT,
+  refund_status TEXT DEFAULT 'pending',
+  refund_date TEXT,
+  refund_reference TEXT,
+  reason_code TEXT,
+  inspection_status TEXT DEFAULT 'Pending Check',
+  warehouse_id TEXT,
+  created_at TEXT,
+  updated_at TEXT,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Business Return Items
+CREATE TABLE IF NOT EXISTS business_return_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  return_id INTEGER NOT NULL,
+  product_id TEXT,
+  product_name TEXT NOT NULL,
+  batch_number TEXT,
+  serial_number TEXT,
+  return_quantity INTEGER DEFAULT 1,
+  replacement_quantity INTEGER DEFAULT 0,
+  price REAL DEFAULT 0,
+  gst_percentage REAL DEFAULT 18,
+  tax_amount REAL DEFAULT 0,
+  total REAL DEFAULT 0,
+  FOREIGN KEY(return_id) REFERENCES business_returns(id) ON DELETE CASCADE
+);
+
+-- Business Return Notes
+CREATE TABLE IF NOT EXISTS business_return_notes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  return_id INTEGER NOT NULL,
+  title TEXT,
+  content TEXT,
+  created_at TEXT,
+  FOREIGN KEY(return_id) REFERENCES business_returns(id) ON DELETE CASCADE
+);
+
+-- Business Return Documents
+CREATE TABLE IF NOT EXISTS business_return_documents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  return_id INTEGER NOT NULL,
+  name TEXT,
+  file_path TEXT,
+  created_at TEXT,
+  FOREIGN KEY(return_id) REFERENCES business_returns(id) ON DELETE CASCADE
+);
+
+-- Business Purchases
+CREATE TABLE IF NOT EXISTS business_purchases (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  purchase_number TEXT NOT NULL,
+  purchase_type TEXT DEFAULT 'GST',
+  purchase_date TEXT NOT NULL,
+  due_date TEXT NOT NULL,
+  doc_type TEXT DEFAULT 'PO',
+  status TEXT DEFAULT 'Approved',
+  supplier_name TEXT NOT NULL,
+  supplier_gstin TEXT,
+  billing_address TEXT,
+  contact_number TEXT,
+  warehouse_id TEXT DEFAULT 'Main Godown',
+  purchase_by TEXT,
+  payment_status TEXT DEFAULT 'pending',
+  payment_mode TEXT DEFAULT 'Cash',
+  bank_account_id TEXT,
+  paid_amount REAL DEFAULT 0,
+  advance_amount REAL DEFAULT 0,
+  shipping_charge REAL DEFAULT 0,
+  round_off REAL DEFAULT 0,
+  place_of_supply TEXT DEFAULT 'Maharashtra',
+  return_reason TEXT,
+  subtotal REAL DEFAULT 0,
+  total_discount REAL DEFAULT 0,
+  total_tax REAL DEFAULT 0,
+  grand_total REAL DEFAULT 0,
+  created_at TEXT,
+  updated_at TEXT,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Business Purchase Items
+CREATE TABLE IF NOT EXISTS business_purchase_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  purchase_id INTEGER NOT NULL,
+  product_name TEXT NOT NULL,
+  sku TEXT,
+  batch_number TEXT,
+  expiry_date TEXT,
+  quantity REAL DEFAULT 1,
+  received_quantity REAL DEFAULT 0,
+  free_quantity REAL DEFAULT 0,
+  primary_unit TEXT DEFAULT 'pcs',
+  purchase_price REAL DEFAULT 0,
+  discount REAL DEFAULT 0,
+  gst_percentage REAL DEFAULT 18,
+  tax_amount REAL DEFAULT 0,
+  total REAL DEFAULT 0,
+  FOREIGN KEY(purchase_id) REFERENCES business_purchases(id) ON DELETE CASCADE
+);
+
+-- Business Purchase Notes
+CREATE TABLE IF NOT EXISTS business_purchase_notes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  purchase_id INTEGER NOT NULL,
+  title TEXT,
+  content TEXT,
+  created_at TEXT,
+  FOREIGN KEY(purchase_id) REFERENCES business_purchases(id) ON DELETE CASCADE
+);
+
+-- Business Purchase Documents
+CREATE TABLE IF NOT EXISTS business_purchase_documents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  purchase_id INTEGER NOT NULL,
+  name TEXT,
+  file_path TEXT,
+  FOREIGN KEY(purchase_id) REFERENCES business_purchases(id) ON DELETE CASCADE
+);
+
+-- Business Suppliers
+CREATE TABLE IF NOT EXISTS business_suppliers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  email TEXT,
+  phone TEXT,
+  company TEXT,
+  gstin TEXT,
+  status TEXT DEFAULT 'active',
+  city TEXT,
+  outstanding_balance REAL DEFAULT 0,
+  total_purchased REAL DEFAULT 0,
+  created_at TEXT,
+  updated_at TEXT,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Supplier Addresses
+CREATE TABLE IF NOT EXISTS supplier_addresses (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  supplier_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  address_line1 TEXT,
+  address_line2 TEXT,
+  city TEXT,
+  state TEXT,
+  postal_code TEXT,
+  country TEXT,
+  created_at TEXT,
+  FOREIGN KEY(supplier_id) REFERENCES business_suppliers(id) ON DELETE CASCADE,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Supplier Contacts
+CREATE TABLE IF NOT EXISTS supplier_contacts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  supplier_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  contact_name TEXT NOT NULL,
+  email TEXT,
+  phone TEXT,
+  designation TEXT,
+  created_at TEXT,
+  FOREIGN KEY(supplier_id) REFERENCES business_suppliers(id) ON DELETE CASCADE,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Supplier Notes
+CREATE TABLE IF NOT EXISTS supplier_notes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  supplier_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  note TEXT NOT NULL,
+  created_at TEXT,
+  FOREIGN KEY(supplier_id) REFERENCES business_suppliers(id) ON DELETE CASCADE,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Supplier Payments
+CREATE TABLE IF NOT EXISTS supplier_payments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  supplier_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  amount REAL DEFAULT 0,
+  payment_method TEXT,
+  reference_number TEXT,
+  created_at TEXT,
+  FOREIGN KEY(supplier_id) REFERENCES business_suppliers(id) ON DELETE CASCADE,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Supplier Documents
+CREATE TABLE IF NOT EXISTS supplier_documents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  supplier_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  file_name TEXT NOT NULL,
+  file_url TEXT,
+  file_size TEXT,
+  created_at TEXT,
+  FOREIGN KEY(supplier_id) REFERENCES business_suppliers(id) ON DELETE CASCADE,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Supplier Ledger
+CREATE TABLE IF NOT EXISTS supplier_ledger (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  supplier_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  description TEXT,
+  amount REAL DEFAULT 0,
+  type TEXT,
+  created_at TEXT,
+  FOREIGN KEY(supplier_id) REFERENCES business_suppliers(id) ON DELETE CASCADE,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Business Products
+CREATE TABLE IF NOT EXISTS business_products (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  sku TEXT,
+  category TEXT,
+  status TEXT DEFAULT 'active',
+  stock_status TEXT DEFAULT 'In Stock',
+  quantity REAL DEFAULT 0,
+  low_stock_threshold REAL DEFAULT 5,
+  purchase_price REAL DEFAULT 0,
+  selling_price REAL DEFAULT 0,
+  barcode TEXT,
+  serial_number TEXT,
+  batch_number TEXT,
+  expiry_date TEXT,
+  tax_percentage REAL DEFAULT 18,
+  warehouse_id TEXT DEFAULT 'Main Godown',
+  created_at TEXT,
+  updated_at TEXT,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Product Images
+CREATE TABLE IF NOT EXISTS product_images (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  product_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  image_url TEXT NOT NULL,
+  created_at TEXT,
+  FOREIGN KEY(product_id) REFERENCES business_products(id) ON DELETE CASCADE,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Product Documents
+CREATE TABLE IF NOT EXISTS product_documents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  product_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  file_name TEXT NOT NULL,
+  file_url TEXT,
+  created_at TEXT,
+  FOREIGN KEY(product_id) REFERENCES business_products(id) ON DELETE CASCADE,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Product Stock History
+CREATE TABLE IF NOT EXISTS product_stock_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  product_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  quantity_changed REAL DEFAULT 0,
+  type TEXT,
+  description TEXT,
+  created_at TEXT,
+  FOREIGN KEY(product_id) REFERENCES business_products(id) ON DELETE CASCADE,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Product Notes
+CREATE TABLE IF NOT EXISTS product_notes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  product_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  note TEXT NOT NULL,
+  created_at TEXT,
+  FOREIGN KEY(product_id) REFERENCES business_products(id) ON DELETE CASCADE,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Product Categories
+CREATE TABLE IF NOT EXISTS product_categories (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  category_name TEXT NOT NULL,
+  created_at TEXT,
   FOREIGN KEY(user_id) REFERENCES users(id)
 );
   `;
@@ -585,6 +1298,58 @@ CREATE TABLE IF NOT EXISTS business_invoices (
         created_at TEXT,
         updated_at TEXT,
         FOREIGN KEY(user_id) REFERENCES users(id)
+      );`,
+      `CREATE TABLE IF NOT EXISTS business_customers (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255),
+        phone VARCHAR(50),
+        company VARCHAR(255),
+        status VARCHAR(50) DEFAULT 'lead',
+        notes TEXT,
+        total_spent NUMERIC DEFAULT 0,
+        created_at TEXT,
+        updated_at TEXT,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+      );`,
+      `CREATE TABLE IF NOT EXISTS business_employees (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        role VARCHAR(100),
+        email VARCHAR(255),
+        phone VARCHAR(50),
+        salary NUMERIC DEFAULT 0,
+        status VARCHAR(50) DEFAULT 'active',
+        hire_date TEXT,
+        created_at TEXT,
+        updated_at TEXT,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+      );`,
+      `CREATE TABLE IF NOT EXISTS business_plans (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        start_date TEXT,
+        end_date TEXT,
+        total_budget NUMERIC DEFAULT 0,
+        status VARCHAR(50) DEFAULT 'Draft',
+        created_at TEXT,
+        updated_at TEXT,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+      );`,
+      `CREATE TABLE IF NOT EXISTS business_plan_items (
+        id SERIAL PRIMARY KEY,
+        plan_id INTEGER NOT NULL,
+        type VARCHAR(50),
+        category VARCHAR(100),
+        description TEXT,
+        amount NUMERIC DEFAULT 0,
+        date TEXT,
+        created_at TEXT,
+        FOREIGN KEY(plan_id) REFERENCES business_plans(id) ON DELETE CASCADE
       );`
     ];
     try {
@@ -619,7 +1384,20 @@ CREATE TABLE IF NOT EXISTS business_invoices (
       'ALTER TABLE plan_expenses ADD COLUMN description TEXT',
       'ALTER TABLE meetups ADD COLUMN description TEXT',
       'ALTER TABLE meetups ADD COLUMN category TEXT DEFAULT \'General\'',
-      'ALTER TABLE meetups ADD COLUMN image_url TEXT'
+      'ALTER TABLE meetups ADD COLUMN image_url TEXT',
+      'ALTER TABLE business_invoices ADD COLUMN client_gstin TEXT',
+      'ALTER TABLE business_invoices ADD COLUMN billing_address TEXT',
+      'ALTER TABLE business_invoices ADD COLUMN shipping_address TEXT',
+      'ALTER TABLE business_invoices ADD COLUMN tax_amount REAL DEFAULT 0',
+      'ALTER TABLE business_invoices ADD COLUMN total_amount REAL DEFAULT 0',
+      'ALTER TABLE business_invoices ADD COLUMN paid_amount REAL DEFAULT 0',
+      'ALTER TABLE business_invoices ADD COLUMN due_amount REAL DEFAULT 0',
+      'ALTER TABLE business_invoices ADD COLUMN bank_account_id TEXT',
+      'ALTER TABLE business_invoices ADD COLUMN discount_amount REAL DEFAULT 0',
+      'ALTER TABLE business_invoices ADD COLUMN round_off REAL DEFAULT 0',
+      'ALTER TABLE business_invoices ADD COLUMN payment_mode TEXT',
+      'ALTER TABLE business_invoices ADD COLUMN invoice_type TEXT',
+      'ALTER TABLE business_invoices ADD COLUMN tax_type TEXT'
     ];
 
     alterQueries.forEach(query => {
