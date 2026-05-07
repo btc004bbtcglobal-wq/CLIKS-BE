@@ -9,7 +9,7 @@ const TokenService = require('../utils/tokenService');
 // ── Zod Schemas ───────────────────────────────────────────────────────────────
 // ── SSO Login Gateway ────────────────────────────────────────────────────────
 const ssoLogin = async (req, res) => {
-  const { bnxToken } = req.body;
+  const { bnxToken, appType } = req.body;
   if (!bnxToken) throw new AppError('BNX Token is required', 400, 'BAD_REQUEST');
 
   // Verify token with BNX Mail API
@@ -29,6 +29,11 @@ const ssoLogin = async (req, res) => {
   }
 
   const { email, name, accountType } = bnxProfile;
+
+  // Enforce Business Account for Business App
+  if (appType === 'BUSINESS' && accountType !== 'BUSINESS') {
+    throw new AppError('Access denied. This application requires a BNX Business account.', 403, 'FORBIDDEN');
+  }
   // If the user's name is multiple words, extract a username if missing
   const username = email.split('@')[0];
 
