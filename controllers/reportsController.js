@@ -243,9 +243,25 @@ const reportsController = {
         return sendSuccess(res, { download_url: '/exports/report.csv' }, 'CSV exported');
     },
 
-    // Chart Data Endpoints
     getChartSales: async (req, res) => {
-        return sendSuccess(res, { labels: ['Jan', 'Feb', 'Mar'], data: [120000, 150000, 220000] }, 'Sales chart data compiled');
+        try {
+            const orders = await db.prepare("SELECT date, grand_total FROM business_orders WHERE user_id = ?").all(req.user.id);
+            const monthlyData = Array(12).fill(0);
+            orders.forEach(order => {
+                if (order.date) {
+                    const dateObj = new Date(order.date);
+                    if (!isNaN(dateObj.getTime())) {
+                        const monthIndex = dateObj.getMonth(); // 0 to 11
+                        monthlyData[monthIndex] += (parseFloat(order.grand_total) || 0);
+                    }
+                }
+            });
+            const labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            return sendSuccess(res, { labels, data: monthlyData }, 'Sales chart data compiled');
+        } catch (error) {
+            console.error('Error in getChartSales:', error);
+            return sendError(res, 'Failed to compile sales chart data', 500);
+        }
     },
     getChartPurchases: async (req, res) => {
         return sendSuccess(res, { labels: ['Jan', 'Feb', 'Mar'], data: [90000, 110000, 140000] }, 'Purchases chart data compiled');

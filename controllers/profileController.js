@@ -6,6 +6,7 @@ const { sendSuccess, sendError } = require('../utils/response');
 const safeUser = (user) => {
   if (!user) return null;
   const { password_hash, ...safe } = user;
+  safe.name = user.username; // Map database username to name expected by the frontend
   return safe;
 };
 
@@ -18,10 +19,11 @@ const getProfile = async (req, res) => {
 
 // ── PATCH / — Update username or email ───────────────────────────────────────
 const updateProfile = async (req, res) => {
-  const { username, email } = req.body;
+  const { username, email, name } = req.body;
+  const targetUsername = username || name;
 
-  if (!username && !email) {
-    return sendError(res, 'Provide at least one field to update (username or email)', 400, 'BAD_REQUEST');
+  if (!targetUsername && !email) {
+    return sendError(res, 'Provide at least one field to update (username/name or email)', 400, 'BAD_REQUEST');
   }
 
   const current = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
@@ -36,7 +38,7 @@ const updateProfile = async (req, res) => {
   const updates = [];
   const params = [];
 
-  if (username !== undefined) { updates.push('username = ?'); params.push(username); }
+  if (targetUsername !== undefined) { updates.push('username = ?'); params.push(targetUsername); }
   if (email !== undefined)    { updates.push('email = ?');    params.push(email); }
 
   updates.push('updated_at = ?');
