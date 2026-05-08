@@ -146,6 +146,7 @@ app.use('/api/v1/purchases',        auth, require('./routes/purchases'));
 app.use('/api/v1/suppliers',        auth, require('./routes/suppliers'));
 app.use('/api/v1/products',         auth, require('./routes/products'));
 app.use('/api/v1/staffing',         auth, require('./routes/staffing'));
+app.use('/api/v1/staff',            auth, require('./routes/staff'));
 app.use('/api/v1/business-plans',   auth, require('./routes/businessFinancialPlan'));
 app.use('/api/v1/business-segregation', auth, require('./routes/businessSegregation'));
 app.use('/api/v1/business-compare',     auth, require('./routes/businessCompare'));
@@ -154,6 +155,7 @@ app.use('/api/v1/business-compare',     auth, require('./routes/businessCompare'
 app.use('/api/v1/manufacturing', auth, require('./routes/manufacturing'));
 app.use('/api/v1/bom',           auth, require('./routes/bom'));
 app.use('/api/v1/payroll',       auth, require('./routes/payroll'));
+app.use('/api/v1/accounting',    auth, require('./routes/accounting'));
 
 app.use('/api/v1/attendance',    auth, require('./routes/attendance'));
 app.use('/api/v1/employees',     auth, require('./routes/employees'));
@@ -162,6 +164,8 @@ app.use('/api/v1/payments',      auth, require('./routes/payments'));
 app.use('/api/v1/warehouses',    auth, require('./routes/warehouses'));
 app.use('/api/v1/returns',       auth, require('./routes/returns'));
 app.use('/api/v1/suppliers',     auth, require('./routes/suppliers'));
+app.use('/api/v1/reports',       auth, require('./routes/reports'));
+app.use('/api/v1/expenses',      auth, require('./routes/expenses'));
 
 // ── 404 Handler ───────────────────────────────────────────────────────────────
 app.use((req, res) => {

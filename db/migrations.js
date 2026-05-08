@@ -766,6 +766,17 @@ CREATE TABLE IF NOT EXISTS warehouses (
   user_id INTEGER NOT NULL,
   name TEXT NOT NULL,
   location TEXT,
+  code TEXT,
+  type TEXT,
+  status TEXT DEFAULT 'active',
+  address TEXT,
+  city TEXT,
+  state TEXT,
+  pincode TEXT,
+  contact_person TEXT,
+  phone_number TEXT,
+  email TEXT,
+  capacity_utilization TEXT DEFAULT '0%',
   created_at TEXT,
   FOREIGN KEY(user_id) REFERENCES users(id)
 );
@@ -1271,6 +1282,17 @@ CREATE TABLE IF NOT EXISTS product_categories (
       'ALTER TABLE meetups ADD COLUMN IF NOT EXISTS description TEXT;',
       'ALTER TABLE meetups ADD COLUMN IF NOT EXISTS category TEXT DEFAULT \'General\';',
       'ALTER TABLE meetups ADD COLUMN IF NOT EXISTS image_url TEXT;',
+      'ALTER TABLE warehouses ADD COLUMN IF NOT EXISTS code TEXT;',
+      'ALTER TABLE warehouses ADD COLUMN IF NOT EXISTS type TEXT;',
+      'ALTER TABLE warehouses ADD COLUMN IF NOT EXISTS status TEXT DEFAULT \'active\';',
+      'ALTER TABLE warehouses ADD COLUMN IF NOT EXISTS address TEXT;',
+      'ALTER TABLE warehouses ADD COLUMN IF NOT EXISTS city TEXT;',
+      'ALTER TABLE warehouses ADD COLUMN IF NOT EXISTS state TEXT;',
+      'ALTER TABLE warehouses ADD COLUMN IF NOT EXISTS pincode TEXT;',
+      'ALTER TABLE warehouses ADD COLUMN IF NOT EXISTS contact_person TEXT;',
+      'ALTER TABLE warehouses ADD COLUMN IF NOT EXISTS phone_number TEXT;',
+      'ALTER TABLE warehouses ADD COLUMN IF NOT EXISTS email TEXT;',
+      'ALTER TABLE warehouses ADD COLUMN IF NOT EXISTS capacity_utilization TEXT DEFAULT \'0%\';',
       `CREATE TABLE IF NOT EXISTS inventory (
         id SERIAL PRIMARY KEY,
         user_id INTEGER NOT NULL,
@@ -1397,7 +1419,18 @@ CREATE TABLE IF NOT EXISTS product_categories (
       'ALTER TABLE business_invoices ADD COLUMN round_off REAL DEFAULT 0',
       'ALTER TABLE business_invoices ADD COLUMN payment_mode TEXT',
       'ALTER TABLE business_invoices ADD COLUMN invoice_type TEXT',
-      'ALTER TABLE business_invoices ADD COLUMN tax_type TEXT'
+      'ALTER TABLE business_invoices ADD COLUMN tax_type TEXT',
+      'ALTER TABLE warehouses ADD COLUMN code TEXT',
+      'ALTER TABLE warehouses ADD COLUMN type TEXT',
+      'ALTER TABLE warehouses ADD COLUMN status TEXT DEFAULT \'active\'',
+      'ALTER TABLE warehouses ADD COLUMN address TEXT',
+      'ALTER TABLE warehouses ADD COLUMN city TEXT',
+      'ALTER TABLE warehouses ADD COLUMN state TEXT',
+      'ALTER TABLE warehouses ADD COLUMN pincode TEXT',
+      'ALTER TABLE warehouses ADD COLUMN contact_person TEXT',
+      'ALTER TABLE warehouses ADD COLUMN phone_number TEXT',
+      'ALTER TABLE warehouses ADD COLUMN email TEXT',
+      'ALTER TABLE warehouses ADD COLUMN capacity_utilization TEXT DEFAULT \'0%\''
     ];
 
     alterQueries.forEach(query => {
