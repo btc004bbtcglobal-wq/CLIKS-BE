@@ -46,11 +46,31 @@ const ssoLogin = async (req, res) => {
     const role = accountType === 'BUSINESS' ? 'business' : 'user';
     const hash = 'sso-managed'; // No local password
 
-    const info = await db.prepare(
-      'INSERT INTO users (username, email, password_hash, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(username, email, hash, role, now, now);
+    // Try to use email prefix as username, fallback to full email if prefix is taken
+    let finalUsername = username;
+    const existingByUsername = await db.prepare('SELECT id FROM users WHERE username = ?').get(finalUsername);
+    if (existingByUsername) {
+      finalUsername = email; // Fallback to full email as username
+    }
 
-    user = await db.prepare('SELECT id, username, email, role, created_at FROM users WHERE id = ?').get(info.lastInsertRowid || info.id || info[0]?.id);
+    try {
+      const info = await db.prepare(
+        'INSERT INTO users (username, email, password_hash, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
+      ).run(finalUsername, email, hash, role, now, now);
+
+      user = await db.prepare('SELECT id, username, email, role, created_at FROM users WHERE id = ?').get(info.lastInsertRowid || info.id || info[0]?.id);
+    } catch (dbErr) {
+      // Final safety fallback if even full email as username somehow fails (e.g. race condition)
+      if (dbErr.message.includes('UNIQUE constraint failed: users.username') || dbErr.message.includes('duplicate key value')) {
+        finalUsername = `${username}_${Math.floor(Math.random() * 10000)}`;
+        const info = await db.prepare(
+          'INSERT INTO users (username, email, password_hash, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
+        ).run(finalUsername, email, hash, role, now, now);
+        user = await db.prepare('SELECT id, username, email, role, created_at FROM users WHERE id = ?').get(info.lastInsertRowid || info.id || info[0]?.id);
+      } else {
+        throw dbErr;
+      }
+    }
   }
 
   const { accessToken, refreshToken } = await TokenService.issueEnhancedTokens(user);
