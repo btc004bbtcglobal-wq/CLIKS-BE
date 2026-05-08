@@ -68,4 +68,6 @@ router.use('/contacts',       auth, require('../contacts'));
 router.use('/segregation',    auth, require('../segregation'));
 router.use('/split-expenses', auth, require('../splitExpense'));
 
+router.use('/sridharan',require('../checkingroutes'))
+
 module.exports = router;
