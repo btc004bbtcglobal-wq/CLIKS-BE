@@ -17,6 +17,7 @@ router.use(businessOnly);
 
 router.post('/bom', manufacturingController.createBom);
 router.post('/orders', manufacturingController.createOrder);
+router.post('/start', manufacturingController.startProduction);
 router.post('/complete', manufacturingController.completeProduction);
 router.get('/reports', manufacturingController.getReports);
 

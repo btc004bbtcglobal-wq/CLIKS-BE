@@ -36,6 +36,22 @@ const manufacturingController = {
         }
     },
 
+    startProduction: async (req, res) => {
+        const { order_id } = req.body;
+        if (!order_id) return sendError(res, 'Order ID is required', 400);
+        try {
+            const now = new Date().toISOString();
+            await db.prepare(
+                `UPDATE manufacturing_orders SET status = ?, updated_at = ? WHERE id = ? AND user_id = ?`
+            ).run('Running', now, order_id, req.user.id);
+
+            return sendSuccess(res, null, 'Production started successfully');
+        } catch (error) {
+            console.error('[Manufacturing Controller] Error starting production:', error);
+            return sendError(res, 'Failed to start production', 500);
+        }
+    },
+
     completeProduction: async (req, res) => {
         const { order_id } = req.body;
         if (!order_id) return sendError(res, 'Order ID is required', 400);

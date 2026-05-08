@@ -33,6 +33,7 @@ router.get('/einvoice/:id', gstController.getEinvoiceById);
 router.post('/einvoice/cancel', gstController.cancelEinvoice);
 
 router.post('/ewaybill', gstController.createEwayBill);
+router.get('/ewaybill', gstController.getEwayBills);
 router.get('/ewaybill/:id', gstController.getEwayBillById);
 router.post('/ewaybill/cancel', gstController.cancelEwayBill);
 

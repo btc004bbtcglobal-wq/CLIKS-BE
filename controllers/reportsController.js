@@ -4,21 +4,59 @@ const { sendSuccess, sendError } = require('../utils/response');
 const reportsController = {
     // Dashboard & Analytics
     getDashboardSummary: async (req, res) => {
-        return sendSuccess(res, { status: 'healthy', updated_at: new Date().toISOString() }, 'Dashboard summary compiled');
+        try {
+            const sales = await db.prepare("SELECT SUM(grand_total) as total FROM business_orders WHERE user_id = ?").get(req.user.id);
+            const purchases = await db.prepare("SELECT SUM(grand_total) as total FROM business_purchases WHERE user_id = ?").get(req.user.id);
+            const expenses = await db.prepare("SELECT SUM(amount) as total FROM accounting WHERE user_id = ? AND entry_type = 'expense'").get(req.user.id);
+            return sendSuccess(res, {
+                total_sales: sales?.total || 0,
+                total_purchases: purchases?.total || 0,
+                total_expenses: expenses?.total || 0,
+                status: 'healthy',
+                updated_at: new Date().toISOString()
+            }, 'Dashboard summary compiled');
+        } catch (error) {
+            console.error('Error in getDashboardSummary:', error);
+            return sendError(res, 'Failed to compile dashboard summary', 500);
+        }
     },
 
     // Sales Reports
     getSales: async (req, res) => {
-        return sendSuccess(res, [], 'Sales records compiled');
+        try {
+            const list = await db.prepare("SELECT * FROM business_orders WHERE user_id = ? ORDER BY id DESC").all(req.user.id);
+            return sendSuccess(res, list, 'Sales records compiled');
+        } catch (error) {
+            console.error('Error in getSales:', error);
+            return sendError(res, 'Failed to fetch sales records', 500);
+        }
     },
     getSalesSummary: async (req, res) => {
-        return sendSuccess(res, { total_sales: 540000, margin: '22%' }, 'Sales summary compiled');
+        try {
+            const sales = await db.prepare("SELECT SUM(grand_total) as total FROM business_orders WHERE user_id = ?").get(req.user.id);
+            return sendSuccess(res, { total_sales: sales?.total || 0, margin: '22%' }, 'Sales summary compiled');
+        } catch (error) {
+            console.error('Error in getSalesSummary:', error);
+            return sendError(res, 'Failed to compile sales summary', 500);
+        }
     },
     getSalesByCustomer: async (req, res) => {
-        return sendSuccess(res, [], 'Sales by customer compiled');
+        try {
+            const list = await db.prepare("SELECT customer as name, SUM(grand_total) as total_sales FROM business_orders WHERE user_id = ? GROUP BY customer ORDER BY total_sales DESC").all(req.user.id);
+            return sendSuccess(res, list || [], 'Sales by customer compiled');
+        } catch (error) {
+            console.error('Error in getSalesByCustomer:', error);
+            return sendError(res, 'Failed to compile customer sales', 500);
+        }
     },
     getSalesByProduct: async (req, res) => {
-        return sendSuccess(res, [], 'Sales by product compiled');
+        try {
+            const list = await db.prepare("SELECT name, SUM(total) as total_sales, SUM(quantity) as total_quantity FROM business_order_items WHERE order_id IN (SELECT id FROM business_orders WHERE user_id = ?) GROUP BY name ORDER BY total_sales DESC").all(req.user.id);
+            return sendSuccess(res, list || [], 'Sales by product compiled');
+        } catch (error) {
+            console.error('Error in getSalesByProduct:', error);
+            return sendError(res, 'Failed to compile product sales', 500);
+        }
     },
     getSalesByCategory: async (req, res) => {
         return sendSuccess(res, [], 'Sales by category compiled');

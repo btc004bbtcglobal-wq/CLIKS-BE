@@ -216,6 +216,14 @@ const gstController = {
             return sendError(res, 'Retrieve failed', 500);
         }
     },
+    getEwayBills: async (req, res) => {
+        try {
+            const list = await db.prepare("SELECT * FROM gst_invoices WHERE user_id = ? AND is_eway_bill = 'true' ORDER BY id DESC").all(req.user.id);
+            return sendSuccess(res, list, 'e-Way Bills retrieved');
+        } catch (error) {
+            return sendError(res, 'Retrieve failed', 500);
+        }
+    },
     cancelEwayBill: async (req, res) => {
         return sendSuccess(res, null, 'e-Way Bill cancelled');
     },

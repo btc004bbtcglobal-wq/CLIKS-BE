@@ -199,10 +199,12 @@ const accountingController = {
         try {
             const revenue = await db.prepare("SELECT SUM(amount) as total FROM accounting WHERE user_id = ? AND entry_type = 'income'").get(req.user.id);
             const expenses = await db.prepare("SELECT SUM(amount) as total FROM accounting WHERE user_id = ? AND entry_type = 'expense'").get(req.user.id);
-            const net = (revenue?.total || 1245000) - (expenses?.total || 812000);
+            const rev = revenue?.total || 0;
+            const exp = expenses?.total || 0;
+            const net = rev - exp;
             return sendSuccess(res, {
-                gross_revenue: revenue?.total || 1245000,
-                total_expenses: expenses?.total || 812000,
+                gross_revenue: rev,
+                total_expenses: exp,
                 net_profit: net
             }, 'P&L retrieved');
         } catch (error) {
@@ -238,10 +240,12 @@ const accountingController = {
         return accountingController.createAccount(req, res);
     },
     getBankAccounts: async (req, res) => {
-        return sendSuccess(res, [
-            { id: 1, account_name: 'Main Business Account', bank_name: 'HDFC Bank', balance: 445000 },
-            { id: 2, account_name: 'Digital Sales Account', bank_name: 'Razorpay / UPI', balance: 88200 }
-        ], 'Bank accounts retrieved');
+        try {
+            const list = await db.prepare("SELECT * FROM accounting WHERE user_id = ? AND entry_type = 'AccountConfig'").all(req.user.id);
+            return sendSuccess(res, list, 'Bank accounts retrieved');
+        } catch (error) {
+            return sendError(res, 'Failed to retrieve bank accounts', 500);
+        }
     },
     updateBankAccount: async (req, res) => {
         return accountingController.updateAccount(req, res);
@@ -381,8 +385,8 @@ const accountingController = {
             const revenue = await db.prepare("SELECT SUM(amount) as total FROM accounting WHERE user_id = ? AND entry_type = 'income'").get(req.user.id);
             const expenses = await db.prepare("SELECT SUM(amount) as total FROM accounting WHERE user_id = ? AND entry_type = 'expense'").get(req.user.id);
             return sendSuccess(res, {
-                total_revenue: revenue?.total || 1245000,
-                total_expenses: expenses?.total || 812000,
+                total_revenue: revenue?.total || 0,
+                total_expenses: expenses?.total || 0,
                 status: 'posted'
             }, 'Dashboard summary retrieved');
         } catch (error) {
