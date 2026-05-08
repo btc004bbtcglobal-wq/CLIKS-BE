@@ -1,53 +1,64 @@
 const db = require('../db/connection');
 const { sendSuccess, sendError } = require('../utils/response');
 
-try {
-    db.raw.exec(`
-        ALTER TABLE business_customers ADD COLUMN city TEXT;
-    `);
-} catch (e) {}
+const initTables = async () => {
+    try {
+        const dbType = process.env.DB_TYPE || 'sqlite';
+        const idType = dbType === 'postgres' ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT';
+        
+        const alters = [
+            'ALTER TABLE business_customers ADD COLUMN city TEXT',
+            'ALTER TABLE business_customers ADD COLUMN outstanding_balance REAL DEFAULT 0',
+            'ALTER TABLE business_customers ADD COLUMN total_spent REAL DEFAULT 0'
+        ];
+        for (const alter of alters) {
+            try {
+                await db.prepare(alter).run();
+            } catch (e) {
+                // Ignore if column already exists
+            }
+        }
 
-try {
-    db.raw.exec(`
-        ALTER TABLE business_customers ADD COLUMN outstanding_balance REAL DEFAULT 0;
-    `);
-} catch (e) {}
+        const tables = [
+            `CREATE TABLE IF NOT EXISTS customer_addresses (
+                id ${idType},
+                customer_id INTEGER NOT NULL,
+                address_line1 TEXT,
+                address_line2 TEXT,
+                city TEXT,
+                state TEXT,
+                pincode TEXT,
+                country TEXT DEFAULT 'India',
+                is_primary INTEGER DEFAULT 0,
+                created_at TEXT
+            )`,
+            `CREATE TABLE IF NOT EXISTS customer_notes (
+                id ${idType},
+                customer_id INTEGER NOT NULL,
+                note TEXT NOT NULL,
+                created_at TEXT
+            )`,
+            `CREATE TABLE IF NOT EXISTS customer_documents (
+                id ${idType},
+                customer_id INTEGER NOT NULL,
+                file_name TEXT NOT NULL,
+                file_url TEXT,
+                created_at TEXT
+            )`
+        ];
 
-try {
-    db.raw.exec(`
-        ALTER TABLE business_customers ADD COLUMN total_spent REAL DEFAULT 0;
-    `);
-} catch (e) {}
-
-try {
-    db.raw.exec(`
-        CREATE TABLE IF NOT EXISTS customer_addresses (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            customer_id INTEGER NOT NULL,
-            address_line1 TEXT,
-            address_line2 TEXT,
-            city TEXT,
-            state TEXT,
-            pincode TEXT,
-            country TEXT DEFAULT 'India',
-            is_primary INTEGER DEFAULT 0,
-            created_at TEXT
-        );
-        CREATE TABLE IF NOT EXISTS customer_notes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            customer_id INTEGER NOT NULL,
-            note TEXT NOT NULL,
-            created_at TEXT
-        );
-        CREATE TABLE IF NOT EXISTS customer_documents (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            customer_id INTEGER NOT NULL,
-            file_name TEXT NOT NULL,
-            file_url TEXT,
-            created_at TEXT
-        );
-    `);
-} catch (e) {}
+        for (const sql of tables) {
+            try {
+                await db.prepare(sql).run();
+            } catch (e) {
+                // Ignore table exists or syntax errors
+            }
+        }
+    } catch (err) {
+        console.warn('[CRM Initializer] DB Setup:', err.message);
+    }
+};
+initTables();
 
 const customerCrmController = {
 

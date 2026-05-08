@@ -3,9 +3,11 @@ const { sendSuccess, sendError } = require('../utils/response');
 
 const initTableAndColumns = async () => {
     try {
+        const dbType = process.env.DB_TYPE || 'sqlite';
+        const idType = dbType === 'postgres' ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT';
         await db.prepare(`
             CREATE TABLE IF NOT EXISTS expenses (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id ${idType},
                 user_id INTEGER,
                 account_id INTEGER,
                 category TEXT,

@@ -4,9 +4,11 @@ const { sendSuccess, sendError } = require('../utils/response');
 // Ensure database table and extra helper columns exist dynamically
 const initTableAndColumns = async () => {
     try {
+        const dbType = process.env.DB_TYPE || 'sqlite';
+        const idType = dbType === 'postgres' ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT';
         await db.prepare(`
             CREATE TABLE IF NOT EXISTS gst_invoices (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id ${idType},
                 user_id INTEGER,
                 invoice_number TEXT,
                 client_name TEXT,

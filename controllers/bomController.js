@@ -1,75 +1,88 @@
 const db = require('../db/connection');
 const { sendSuccess, sendError } = require('../utils/response');
 
-try {
-    // Dynamic table setups at runtime
-    db.raw.exec(`
-        CREATE TABLE IF NOT EXISTS manufacturing_boms (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            name TEXT NOT NULL,
-            description TEXT,
-            status TEXT DEFAULT 'active',
-            product_id INTEGER,
-            items TEXT,
-            created_at TEXT,
-            updated_at TEXT
-        );
-        CREATE TABLE IF NOT EXISTS bom_materials (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            bom_id INTEGER NOT NULL,
-            material_id TEXT NOT NULL,
-            material_name TEXT NOT NULL,
-            required_quantity REAL,
-            unit TEXT,
-            cost_per_unit REAL,
-            created_at TEXT
-        );
-        CREATE TABLE IF NOT EXISTS bom_processes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            bom_id INTEGER NOT NULL,
-            name TEXT NOT NULL,
-            duration REAL,
-            created_at TEXT
-        );
-        CREATE TABLE IF NOT EXISTS bom_labor (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            bom_id INTEGER NOT NULL,
-            worker_name TEXT NOT NULL,
-            cost REAL,
-            created_at TEXT
-        );
-        CREATE TABLE IF NOT EXISTS bom_machines (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            bom_id INTEGER NOT NULL,
-            machine_name TEXT NOT NULL,
-            runtime REAL,
-            created_at TEXT
-        );
-        CREATE TABLE IF NOT EXISTS bom_versions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            bom_id INTEGER NOT NULL,
-            version TEXT NOT NULL,
-            items TEXT,
-            created_at TEXT
-        );
-        CREATE TABLE IF NOT EXISTS bom_notes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            bom_id INTEGER NOT NULL,
-            note TEXT NOT NULL,
-            created_at TEXT
-        );
-        CREATE TABLE IF NOT EXISTS bom_documents (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            bom_id INTEGER NOT NULL,
-            file_name TEXT NOT NULL,
-            file_url TEXT,
-            created_at TEXT
-        );
-    `);
-} catch (e) {
-    console.warn('[BOM Initializer] DB Setup:', e.message);
-}
+const initTables = async () => {
+    try {
+        const dbType = process.env.DB_TYPE || 'sqlite';
+        const idType = dbType === 'postgres' ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT';
+        
+        const tables = [
+            `CREATE TABLE IF NOT EXISTS manufacturing_boms (
+                id ${idType},
+                user_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT,
+                status TEXT DEFAULT 'active',
+                product_id INTEGER,
+                items TEXT,
+                created_at TEXT,
+                updated_at TEXT
+            )`,
+            `CREATE TABLE IF NOT EXISTS bom_materials (
+                id ${idType},
+                bom_id INTEGER NOT NULL,
+                material_id TEXT NOT NULL,
+                material_name TEXT NOT NULL,
+                required_quantity REAL,
+                unit TEXT,
+                cost_per_unit REAL,
+                created_at TEXT
+            )`,
+            `CREATE TABLE IF NOT EXISTS bom_processes (
+                id ${idType},
+                bom_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                duration REAL,
+                created_at TEXT
+            )`,
+            `CREATE TABLE IF NOT EXISTS bom_labor (
+                id ${idType},
+                bom_id INTEGER NOT NULL,
+                worker_name TEXT NOT NULL,
+                cost REAL,
+                created_at TEXT
+            )`,
+            `CREATE TABLE IF NOT EXISTS bom_machines (
+                id ${idType},
+                bom_id INTEGER NOT NULL,
+                machine_name TEXT NOT NULL,
+                runtime REAL,
+                created_at TEXT
+            )`,
+            `CREATE TABLE IF NOT EXISTS bom_versions (
+                id ${idType},
+                bom_id INTEGER NOT NULL,
+                version TEXT NOT NULL,
+                items TEXT,
+                created_at TEXT
+            )`,
+            `CREATE TABLE IF NOT EXISTS bom_notes (
+                id ${idType},
+                bom_id INTEGER NOT NULL,
+                note TEXT NOT NULL,
+                created_at TEXT
+            )`,
+            `CREATE TABLE IF NOT EXISTS bom_documents (
+                id ${idType},
+                bom_id INTEGER NOT NULL,
+                file_name TEXT NOT NULL,
+                file_url TEXT,
+                created_at TEXT
+            )`
+        ];
+
+        for (const sql of tables) {
+            try {
+                await db.prepare(sql).run();
+            } catch (e) {
+                // Ignore table exists or syntax errors
+            }
+        }
+    } catch (err) {
+        console.warn('[BOM Initializer] DB Setup:', err.message);
+    }
+};
+initTables();
 
 const bomController = {
     // POST /bom

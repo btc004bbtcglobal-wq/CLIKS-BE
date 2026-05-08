@@ -2,65 +2,79 @@ const db = require('../db/connection');
 const { sendSuccess, sendError } = require('../utils/response');
 
 // Ensure tables/columns exist at runtime to prevent any SQLite errors
-try {
-    db.raw.exec(`
-        CREATE TABLE IF NOT EXISTS warehouse_zones (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            warehouse_id INTEGER NOT NULL,
-            name TEXT NOT NULL,
-            created_at TEXT
-        );
-        CREATE TABLE IF NOT EXISTS warehouse_racks (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            warehouse_id INTEGER NOT NULL,
-            name TEXT NOT NULL,
-            created_at TEXT
-        );
-        CREATE TABLE IF NOT EXISTS warehouse_bins (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            warehouse_id INTEGER NOT NULL,
-            name TEXT NOT NULL,
-            created_at TEXT
-        );
-        CREATE TABLE IF NOT EXISTS warehouse_notes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            warehouse_id INTEGER NOT NULL,
-            note TEXT NOT NULL,
-            created_at TEXT
-        );
-        CREATE TABLE IF NOT EXISTS warehouse_documents (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            warehouse_id INTEGER NOT NULL,
-            file_name TEXT NOT NULL,
-            file_url TEXT,
-            created_at TEXT
-        );
-    `);
+const initTables = async () => {
+    try {
+        const dbType = process.env.DB_TYPE || 'sqlite';
+        const idType = dbType === 'postgres' ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT';
+        
+        const tables = [
+            `CREATE TABLE IF NOT EXISTS warehouse_zones (
+                id ${idType},
+                warehouse_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                created_at TEXT
+            )`,
+            `CREATE TABLE IF NOT EXISTS warehouse_racks (
+                id ${idType},
+                warehouse_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                created_at TEXT
+            )`,
+            `CREATE TABLE IF NOT EXISTS warehouse_bins (
+                id ${idType},
+                warehouse_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                created_at TEXT
+            )`,
+            `CREATE TABLE IF NOT EXISTS warehouse_notes (
+                id ${idType},
+                warehouse_id INTEGER NOT NULL,
+                note TEXT NOT NULL,
+                created_at TEXT
+            )`,
+            `CREATE TABLE IF NOT EXISTS warehouse_documents (
+                id ${idType},
+                warehouse_id INTEGER NOT NULL,
+                file_name TEXT NOT NULL,
+                file_url TEXT,
+                created_at TEXT
+            )`
+        ];
 
-    // Alter warehouses table with safety checks
-    const columns = [
-        'code TEXT',
-        'type TEXT DEFAULT "godown"',
-        'status TEXT DEFAULT "active"',
-        'address TEXT',
-        'city TEXT',
-        'state TEXT',
-        'pincode TEXT',
-        'contact_person TEXT',
-        'phone_number TEXT',
-        'email TEXT',
-        'capacity_utilization TEXT DEFAULT "0%"'
-    ];
-    columns.forEach(col => {
-        try {
-            db.raw.exec(`ALTER TABLE warehouses ADD COLUMN ${col}`);
-        } catch (e) {
-            // Ignore duplicate column errors
+        for (const sql of tables) {
+            try {
+                await db.prepare(sql).run();
+            } catch (e) {
+                // Ignore table exists or syntax errors
+            }
         }
-    });
-} catch (e) {
-    console.warn('[Warehouse Initialization] Warning:', e.message);
-}
+
+        // Alter warehouses table with safety checks
+        const columns = [
+            'code TEXT',
+            'type TEXT DEFAULT \'godown\'',
+            'status TEXT DEFAULT \'active\'',
+            'address TEXT',
+            'city TEXT',
+            'state TEXT',
+            'pincode TEXT',
+            'contact_person TEXT',
+            'phone_number TEXT',
+            'email TEXT',
+            'capacity_utilization TEXT DEFAULT \'0%\''
+        ];
+        for (const col of columns) {
+            try {
+                await db.prepare(`ALTER TABLE warehouses ADD COLUMN ${col}`).run();
+            } catch (e) {
+                // Ignore duplicate column errors
+            }
+        }
+    } catch (err) {
+        console.warn('[Warehouse Initialization] Warning:', err.message);
+    }
+};
+initTables();
 
 const warehouseController = {
     // POST /warehouses
