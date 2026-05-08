@@ -88,6 +88,63 @@ async function seed() {
 
                 console.log(`  Seeded 2 warehouse transfers for user ${userId}.`);
             }
+
+            // 5. Seed GST Invoices if none exist
+            const existingGstInvoices = await db.prepare('SELECT * FROM gst_invoices WHERE user_id = ?').all(userId);
+            if (existingGstInvoices.length === 0) {
+                // Invoices
+                await db.prepare(`
+                    INSERT INTO gst_invoices (
+                        user_id, invoice_number, client_name, amount, gst_amount, invoice_type, place_of_supply,
+                        taxable_value, gst_percentage, cgst_amount, sgst_amount, igst_amount, total_tax,
+                        reverse_charge, irn_number, qr_status, is_eway_bill, is_reconciliation, created_at
+                    ) VALUES (?, 'GST-2026-104', 'CLIKS Digital Services', 118000, 18000, 'B2B', '27-Maharashtra',
+                             100000, 18, 9000, 9000, 0, 18000, 'No', '9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b',
+                             'Generated', 'false', 'false', ?)
+                `).run(userId, now);
+
+                await db.prepare(`
+                    INSERT INTO gst_invoices (
+                        user_id, invoice_number, client_name, amount, gst_amount, invoice_type, place_of_supply,
+                        taxable_value, gst_percentage, cgst_amount, sgst_amount, igst_amount, total_tax,
+                        reverse_charge, irn_number, qr_status, is_eway_bill, is_reconciliation, created_at
+                    ) VALUES (?, 'GST-2026-105', 'Acme Corporates', 56000, 6000, 'B2C', '29-Karnataka',
+                             50000, 12, 0, 0, 6000, 6000, 'No', '5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f',
+                             'Generated', 'false', 'false', ?)
+                `).run(userId, now);
+
+                // e-Way Bills
+                await db.prepare(`
+                    INSERT INTO gst_invoices (
+                        user_id, invoice_number, client_name, amount, gst_amount, eway_bill_number,
+                        transporter_name, vehicle_number, transport_distance, dispatch_location, delivery_location,
+                        status, is_eway_bill, is_reconciliation, created_at
+                    ) VALUES (?, 'GST-2026-104', 'CLIKS Digital Services', 118000, 18000, 'EWB-2026-9011',
+                             'Bluedart Freight Ltd.', 'MH-02-EH-9081', 240, 'Mumbai Warehouse', 'Pune Retail Store',
+                             'Active', 'true', 'false', ?)
+                `).run(userId, now);
+
+                // Reconciliations
+                await db.prepare(`
+                    INSERT INTO gst_invoices (
+                        user_id, invoice_number, client_name, amount, gst_amount, vendor_gstin, vendor_name,
+                        taxable_value, cgst_amount, sgst_amount, igst_amount, eligible_itc, invoice_match_status,
+                        mismatch_reason, reconciliation_date, is_reconciliation, created_at
+                    ) VALUES (?, 'RECON-101', 'Acme Hardware Corporates', 35000, 6300, '27AAAAA1111A1Z1', 'Acme Hardware Corporates',
+                             35000, 3150, 3150, 0, 6300, 'matched', 'None', '2026-05-01', 'true', ?)
+                `).run(userId, now);
+
+                await db.prepare(`
+                    INSERT INTO gst_invoices (
+                        user_id, invoice_number, client_name, amount, gst_amount, vendor_gstin, vendor_name,
+                        taxable_value, cgst_amount, sgst_amount, igst_amount, eligible_itc, invoice_match_status,
+                        mismatch_reason, reconciliation_date, is_reconciliation, created_at
+                    ) VALUES (?, 'RECON-102', 'Bengaluru Spares Ltd.', 15000, 2700, '29BBBBB2222B2Z2', 'Bengaluru Spares Ltd.',
+                             15000, 0, 0, 2700, 2700, 'mismatch', 'Tax rate mismatch (Supplier logged 12% instead of 18%)', '2026-05-03', 'true', ?)
+                `).run(userId, now);
+
+                console.log(`  Seeded GST invoices and reconciliations for user ${userId}.`);
+            }
         }
 
         console.log('✅ Seeding stock and warehouse data completed successfully for all users!');
