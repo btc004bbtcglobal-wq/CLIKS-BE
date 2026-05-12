@@ -100,9 +100,9 @@ if (dbType === 'postgres') {
     prepare: (sql) => {
       const stmt = sqliteDb.prepare(sql);
       return {
-        get: async (...params) => stmt.get(...params),
-        all: async (...params) => stmt.all(...params),
-        run: async (...params) => stmt.run(...params)
+        get: async (...params) => stmt.get(...params.flat()),
+        all: async (...params) => stmt.all(...params.flat()),
+        run: async (...params) => stmt.run(...params.flat())
       };
     },
     transaction: (fn) => {

@@ -156,11 +156,22 @@ const adjustQuantity = async (req, res) => {
 
   const updatedItem = await db.prepare('SELECT * FROM stock WHERE id = ?').get(req.params.id);
 
-  // Log transaction
+  // Log transaction with logistics metadata
+  const { purchase_bill_ref, received_by, warehouse_id } = req.body;
   await db.prepare(`
-    INSERT INTO stock_transactions (stock_id, user_id, type, quantity, date, created_at)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(req.params.id, req.user.id, delta > 0 ? 'in' : 'out', Math.abs(delta), now, now);
+    INSERT INTO stock_transactions (stock_id, user_id, type, quantity, date, created_at, purchase_bill_ref, received_by, warehouse_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    req.params.id, 
+    req.user.id, 
+    delta > 0 ? 'in' : 'out', 
+    Math.abs(delta), 
+    now, 
+    now,
+    purchase_bill_ref || null,
+    received_by || null,
+    warehouse_id || null
+  );
 
   return sendSuccess(res, enrichRow(updatedItem), 'Quantity adjusted');
 };

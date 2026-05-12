@@ -1,3 +1,6 @@
+const fs = require('fs');
+const path = require('path');
+const { randomUUID } = require('crypto');
 const bcrypt = require('bcryptjs');
 const db = require('../db/connection');
 const { sendSuccess, sendError } = require('../utils/response');
@@ -17,17 +20,32 @@ const getProfile = async (req, res) => {
   return sendSuccess(res, safeUser(user));
 };
 
-// ── PATCH / — Update username or email ───────────────────────────────────────
+// ── PATCH / — Update username, email, or avatar ───────────────────────────────
 const updateProfile = async (req, res) => {
-  const { username, email, name } = req.body;
+  const { username, email, name, avatar_data, avatar_name } = req.body;
   const targetUsername = username || name;
 
-  if (!targetUsername && !email) {
-    return sendError(res, 'Provide at least one field to update (username/name or email)', 400, 'BAD_REQUEST');
+  if (!targetUsername && !email && !avatar_data) {
+    return sendError(res, 'Provide at least one field to update', 400, 'BAD_REQUEST');
   }
 
   const current = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
   if (!current) return sendError(res, 'User not found', 404, 'NOT_FOUND');
+
+  let avatar_url = null;
+  if (avatar_data && avatar_name) {
+    try {
+      const base64Data = avatar_data.replace(/^data:.*?;base64,/, '');
+      const ext = path.extname(avatar_name) || '.png';
+      const fileName = `avatar-${randomUUID()}${ext}`;
+      const uploadPath = path.join(__dirname, '../uploads', fileName);
+      
+      fs.writeFileSync(uploadPath, base64Data, 'base64');
+      avatar_url = `/uploads/${fileName}`;
+    } catch (err) {
+      console.error('Avatar upload error:', err);
+    }
+  }
 
   // Check email uniqueness if changing
   if (email && email !== current.email) {
@@ -40,6 +58,7 @@ const updateProfile = async (req, res) => {
 
   if (targetUsername !== undefined) { updates.push('username = ?'); params.push(targetUsername); }
   if (email !== undefined)    { updates.push('email = ?');    params.push(email); }
+  if (avatar_url)             { updates.push('avatar_url = ?'); params.push(avatar_url); }
 
   updates.push('updated_at = ?');
   params.push(new Date().toISOString());

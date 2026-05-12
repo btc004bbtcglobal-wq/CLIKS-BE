@@ -24,7 +24,10 @@ const billingController = {
 
             query += ` ORDER BY due_date DESC, id DESC`;
 
-            const invoices = await db.prepare(query).all(...params);
+            const invoices = await db.prepare(query).all(params);
+
+            // Guard against null rows to avoid breaking iterations
+            if (!Array.isArray(invoices)) return sendSuccess(res, [], 'Invoices fetched successfully');
 
             // Parse items safely
             invoices.forEach(inv => {
@@ -53,11 +56,38 @@ const billingController = {
         } = req.body;
 
         if (!client_name) return sendError(res, 'Client name is required', 400);
+        
+        // Double validation logic to handle edge cases where stringified corruption "NaN" might leak in 
+        // from external system layers. Normalizes all currency values back to strict pure numeric values.
+        const numAmount = parseFloat(amount) || 0;
+        const numTax = parseFloat(tax_amount) || 0;
+        const numTotal = parseFloat(total_amount) || 0;
+        const numPaid = parseFloat(paid_amount) || 0;
+        const numDue = parseFloat(due_amount) || 0;
+        const numDiscount = parseFloat(discount_amount) || 0;
+        const numRoundOff = parseFloat(round_off) || 0;
 
         try {
             const now = new Date().toISOString();
             const invNum = invoice_number || `INV-${Date.now().toString().slice(-6)}`;
+                console.log('========== CREATE INVOICE DEBUG ==========');
 
+            console.log('REQ.USER:', req.user);
+
+            console.log('REQ.BODY:', req.body);
+
+            console.log('ITEMS:', items);
+            console.log('ITEMS TYPE:', typeof items);
+
+            console.log('FINAL VALUES:', {
+                numAmount,
+                numTax,
+                numTotal,
+                numPaid,
+                numDue,
+                numDiscount,
+                numRoundOff
+            });
             const result = await db.prepare(`
                 INSERT INTO business_invoices (
                     user_id, invoice_number, client_name, client_email, client_gstin,
@@ -68,8 +98,8 @@ const billingController = {
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `).run(
                 req.user.id, invNum, client_name, client_email || null, client_gstin || null,
-                billing_address || null, shipping_address || null, amount || 0, tax_amount || 0, total_amount || 0,
-                paid_amount || 0, due_amount || 0, bank_account_id || null, discount_amount || 0, round_off || 0,
+                billing_address || null, shipping_address || null, numAmount, numTax, numTotal,
+                numPaid, numDue, bank_account_id || null, numDiscount, numRoundOff,
                 status || 'Draft', due_date, payment_mode || 'Cash', invoice_type || 'GST', tax_type || 'Exclusive',
                 typeof items === 'string' ? items : JSON.stringify(items || []),
                 now, now
@@ -120,6 +150,14 @@ const billingController = {
             discount_amount, round_off, status, due_date, payment_mode, invoice_type, tax_type, items
         } = req.body;
 
+        const numAmount = parseFloat(amount) || 0;
+        const numTax = parseFloat(tax_amount) || 0;
+        const numTotal = parseFloat(total_amount) || numAmount;
+        const numPaid = parseFloat(paid_amount) || numTotal;
+        const numDue = parseFloat(due_amount) || 0;
+        const numDiscount = parseFloat(discount_amount) || 0;
+        const numRoundOff = parseFloat(round_off) || 0;
+
         try {
             const invoice = await db.prepare('SELECT id FROM business_invoices WHERE id = ? AND user_id = ?').get(id, req.user.id);
             if (!invoice) return sendError(res, 'Invoice not found', 404);
@@ -135,8 +173,8 @@ const billingController = {
                 WHERE id = ? AND user_id = ?
             `).run(
                 client_name, client_email, client_gstin || null, billing_address || null, shipping_address || null,
-                amount, tax_amount || 0, total_amount || amount, paid_amount || amount, due_amount || 0, bank_account_id || null,
-                discount_amount || 0, round_off || 0, status || 'Unpaid', due_date, payment_mode || 'Cash', invoice_type || 'GST',
+                numAmount, numTax, numTotal, numPaid, numDue, bank_account_id || null,
+                numDiscount, numRoundOff, status || 'Unpaid', due_date, payment_mode || 'Cash', invoice_type || 'GST',
                 tax_type || 'Exclusive', typeof items === 'string' ? items : JSON.stringify(items || []),
                 now, id, req.user.id
             );
@@ -178,6 +216,8 @@ const billingController = {
                 WHERE user_id = ? AND (invoice_number LIKE ? OR client_name LIKE ? OR client_email LIKE ?)
                 ORDER BY due_date DESC
             `).all(req.user.id, wildcard, wildcard, wildcard);
+
+            if (!Array.isArray(invoices)) return sendSuccess(res, [], 'Invoices fetched successfully');
 
             invoices.forEach(inv => {
                 if (inv.items && typeof inv.items === 'string') {

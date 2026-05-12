@@ -214,10 +214,32 @@ const accountingController = {
         }
     },
     getBalanceSheet: async (req, res) => {
-        return sendSuccess(res, {
-            assets: { cash: 125000, bank: 445000, inventory: 812000, receivables: 210000, fixed_assets: 1500000 },
-            liabilities: { payables: 112000, gst_payable: 54200, loans: 500000, equity: 2425800 }
-        }, 'Balance sheet retrieved');
+        try {
+            const rev = await db.prepare("SELECT SUM(amount) as total FROM accounting WHERE user_id = ? AND entry_type = 'income'").get(req.user.id);
+            const exp = await db.prepare("SELECT SUM(amount) as total FROM accounting WHERE user_id = ? AND entry_type = 'expense'").get(req.user.id);
+            const cashAvailable = (rev?.total || 0) - (exp?.total || 0);
+
+            return sendSuccess(res, {
+                assets: { 
+                    cash: Math.max(0, cashAvailable), 
+                    bank: 0, 
+                    inventory: 0, 
+                    receivables: 0, 
+                    fixed_assets: 0 
+                },
+                liabilities: { 
+                    payables: 0, 
+                    gst_payable: (rev?.total || 0) * 0.18, // Rough approximation logic if tax not isolated
+                    loans: 0, 
+                    equity: Math.max(0, cashAvailable) 
+                }
+            }, 'Balance sheet calculated');
+        } catch (e) {
+            return sendSuccess(res, {
+                assets: { cash: 0, bank: 0, inventory: 0, receivables: 0, fixed_assets: 0 },
+                liabilities: { payables: 0, gst_payable: 0, loans: 0, equity: 0 }
+            }, 'Balance sheet default');
+        }
     },
     getCashFlow: async (req, res) => {
         return sendSuccess(res, { operating_inflows: 85000, investing_outflows: 12000, net_change: 73000 }, 'Cash flow retrieved');
@@ -315,7 +337,7 @@ const accountingController = {
         return sendSuccess(res, req.body, 'Fixed asset logged');
     },
     getFixedAssets: async (req, res) => {
-        return sendSuccess(res, [{ id: 1, name: 'Commercial Godown B Property', purchase_value: 1500000 }], 'Fixed assets retrieved');
+        return sendSuccess(res, [], 'Fixed assets retrieved');
     },
     createDepreciation: async (req, res) => {
         return sendSuccess(res, req.body, 'Depreciation logged');

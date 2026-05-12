@@ -291,15 +291,65 @@ const orderController = {
             const order = await db.prepare('SELECT * FROM business_orders WHERE id = ? AND user_id = ?').get(id, req.user.id);
             if (!order) return sendError(res, 'Order not found', 404);
 
-            // Convert to Invoice status
-            await db.prepare("UPDATE business_orders SET status = 'Invoiced', pending_amount = 0, updated_at = ? WHERE id = ?").run(new Date().toISOString(), id);
+            // Fetch order items for the invoice
+            const orderItems = await db.prepare('SELECT * FROM business_order_items WHERE order_id = ?').all(id);
+            
+            const now = new Date().toISOString();
+            const invoiceNumber = `INV-${Date.now().toString().slice(-6)}`;
 
-            // Deduct stock or update customer balance if possible
+            // Map items to expected invoice structure format
+            const mappedItems = orderItems.map(item => ({
+                description: item.name,
+                quantity: parseFloat(item.quantity) || 0,
+                price: parseFloat(item.price) || 0,
+                tax_rate: parseFloat(item.gst) || 0,
+                total: parseFloat(item.total) || 0
+            }));
+
+            // 1. Explicitly create the linked Invoice inside business_invoices database!
+            const invoiceResult = await db.prepare(`
+                INSERT INTO business_invoices (
+                    user_id, invoice_number, client_name, client_email, client_gstin,
+                    billing_address, shipping_address, amount, tax_amount, total_amount,
+                    paid_amount, due_amount, bank_account_id, discount_amount, round_off,
+                    status, due_date, payment_mode, invoice_type, tax_type, items,
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+                req.user.id,
+                invoiceNumber,
+                order.customer,
+                null, // Client email not currently saved in orders
+                order.customer_gstin || null,
+                order.billing_address || null,
+                order.shipping_address || null,
+                parseFloat(order.subtotal) || 0,
+                parseFloat(order.total_tax) || 0,
+                parseFloat(order.grand_total) || 0,
+                parseFloat(order.advance_amount) || 0,
+                parseFloat(order.pending_amount) || 0,
+                null, // No assigned bank account
+                parseFloat(order.total_discount) || 0,
+                0,    // round off
+                (parseFloat(order.advance_amount) >= parseFloat(order.grand_total)) ? 'Paid' : 'Partially Paid',
+                order.delivery_date || now.split('T')[0],
+                'Cash',
+                'GST',
+                'Exclusive',
+                JSON.stringify(mappedItems),
+                now,
+                now
+            );
+
+            // 2. Convert original order status to Invoiced
+            await db.prepare("UPDATE business_orders SET status = 'Invoiced', pending_amount = 0, updated_at = ? WHERE id = ?").run(now, id);
+
+            // 3. Update customer total spent metrics
             if (order.customer_id) {
                 await db.prepare("UPDATE business_customers SET total_spent = total_spent + ? WHERE id = ?").run(order.grand_total, order.customer_id);
             }
 
-            return sendSuccess(res, { id, status: 'Invoiced' }, 'Order successfully converted to Invoice');
+            return sendSuccess(res, { id, invoice_id: invoiceResult.lastInsertRowid, status: 'Invoiced' }, 'Order successfully converted to Invoice via backend processing.');
         } catch (error) {
             console.error('[Order Controller] Error converting to invoice:', error);
             return sendError(res, 'Failed to convert order to invoice', 500);

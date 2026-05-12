@@ -66,9 +66,19 @@ const initTables = async () => {
         for (const col of columns) {
             try {
                 await db.prepare(`ALTER TABLE warehouses ADD COLUMN ${col}`).run();
-            } catch (e) {
-                // Ignore duplicate column errors
-            }
+            } catch (e) {}
+        }
+
+        // Alter stock_transactions for logistics support
+        const txColumns = [
+            'purchase_bill_ref TEXT',
+            'received_by TEXT',
+            'warehouse_id INTEGER'
+        ];
+        for (const col of txColumns) {
+            try {
+                await db.prepare(`ALTER TABLE stock_transactions ADD COLUMN ${col}`).run();
+            } catch (e) {}
         }
     } catch (err) {
         console.warn('[Warehouse Initialization] Warning:', err.message);
@@ -364,12 +374,22 @@ const warehouseController = {
 
     // GET /warehouses/:id/valuation
     getWarehouseValuation: async (req, res) => {
-        return sendSuccess(res, { valuation: 100000 }, 'Valuation fetched');
+        try {
+            const result = await db.prepare('SELECT SUM(quantity * unit_price) as total FROM stock WHERE user_id = ?').get(req.user.id);
+            return sendSuccess(res, { valuation: result.total || 0 }, 'Valuation fetched');
+        } catch (err) {
+            return sendError(res, 'Failed to fetch valuation', 500);
+        }
     },
 
     // GET /warehouses/:id/capacity
     getWarehouseCapacity: async (req, res) => {
-        return sendSuccess(res, { capacity: '80%', total: '1000sqft' }, 'Capacity statistics fetched');
+        try {
+            const wh = await db.prepare('SELECT capacity_utilization FROM warehouses WHERE id = ?').get(req.params.id);
+            return sendSuccess(res, { capacity: wh?.capacity_utilization || '0%', total: 'Variable' }, 'Capacity statistics fetched');
+        } catch (err) {
+            return sendError(res, 'Failed to fetch capacity', 500);
+        }
     },
 
     // GET /warehouses/:id/low-stock
@@ -432,37 +452,47 @@ const warehouseController = {
 
     // GET /warehouses/:id/analytics
     getWarehouseAnalytics: async (req, res) => {
-        return sendSuccess(res, { total_products: 15, turnover_rate: '4.2x' }, 'Warehouse analytics metrics fetched');
+        try {
+            const products = await db.prepare('SELECT COUNT(*) as count FROM stock WHERE user_id = ?').get(req.user.id);
+            const warehouses = await db.prepare('SELECT COUNT(*) as count FROM warehouses WHERE user_id = ?').get(req.user.id);
+            return sendSuccess(res, { total_products: products.count || 0, active_facilities: warehouses.count || 0, turnover_rate: 'Derived' }, 'Warehouse analytics metrics fetched');
+        } catch (err) {
+            return sendError(res, 'Failed to load analytics', 500);
+        }
     },
 
     // GET /warehouses/reports/stock
     getWarehouseReportStock: async (req, res) => {
-        return sendSuccess(res, [], 'Warehouse stock report data');
+        const rows = await db.prepare('SELECT name, quantity, location FROM stock WHERE user_id = ?').all(req.user.id);
+        return sendSuccess(res, rows, 'Warehouse stock report data');
     },
 
     // GET /warehouses/reports/valuation
     getWarehouseReportValuation: async (req, res) => {
-        return sendSuccess(res, [], 'Warehouse valuation report data');
+        const rows = await db.prepare('SELECT name, (quantity * unit_price) as valuation FROM stock WHERE user_id = ?').all(req.user.id);
+        return sendSuccess(res, rows, 'Warehouse valuation report data');
     },
 
     // GET /warehouses/reports/movement
     getWarehouseReportMovement: async (req, res) => {
-        return sendSuccess(res, [], 'Warehouse movement report data');
+        const rows = await db.prepare('SELECT * FROM warehouse_transfers WHERE user_id = ? ORDER BY id DESC LIMIT 50').all(req.user.id);
+        return sendSuccess(res, rows, 'Warehouse movement report data');
     },
 
     // GET /warehouses/reports/capacity
     getWarehouseReportCapacity: async (req, res) => {
-        return sendSuccess(res, [], 'Warehouse capacity report data');
+        const rows = await db.prepare('SELECT name, capacity_utilization FROM warehouses WHERE user_id = ?').all(req.user.id);
+        return sendSuccess(res, rows, 'Warehouse capacity report data');
     },
 
     // GET /warehouses/reports/damage
     getWarehouseReportDamage: async (req, res) => {
-        return sendSuccess(res, [], 'Warehouse damage report data');
+        return sendSuccess(res, [], 'No damaged records queried');
     },
 
     // GET /warehouses/reports/expiry
     getWarehouseReportExpiry: async (req, res) => {
-        return sendSuccess(res, [], 'Warehouse expiry report data');
+        return sendSuccess(res, [], 'No expiry records tracked');
     },
 
     // POST /warehouses/import
@@ -497,8 +527,17 @@ const warehouseController = {
         try {
             const warehouses = await db.prepare('SELECT * FROM warehouses WHERE user_id = ?').all(req.user.id);
             const transfers = await db.prepare('SELECT * FROM warehouse_transfers WHERE user_id = ?').all(req.user.id);
+            
+            const inwards = await db.prepare(`
+                SELECT t.*, s.name as product_name, w.name as warehouse_name 
+                FROM stock_transactions t 
+                LEFT JOIN stock s ON t.stock_id = s.id 
+                LEFT JOIN warehouses w ON t.warehouse_id = w.id
+                WHERE t.user_id = ? AND t.type = 'in'
+                ORDER BY t.id DESC
+            `).all(req.user.id);
 
-            return sendSuccess(res, { warehouses, transfers }, 'Warehouse reports fetched successfully');
+            return sendSuccess(res, { warehouses, transfers, inwards }, 'Warehouse reports fetched successfully');
         } catch (error) {
             console.error('[Warehouse Controller] Error fetching reports:', error);
             return sendError(res, 'Failed to fetch warehouse reports', 500);

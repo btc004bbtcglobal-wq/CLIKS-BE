@@ -39,6 +39,10 @@ const initTableAndColumns = async () => {
         'invoice_match_status',
         'mismatch_reason',
         'reconciliation_date',
+        'invoice_amount',
+        'input_cgst',
+        'input_sgst',
+        'input_igst',
         'transporter_name',
         'vehicle_number',
         'transport_distance',
@@ -63,7 +67,7 @@ initTableAndColumns();
 const gstController = {
     // 1. Settings
     getSettings: async (req, res) => {
-        return sendSuccess(res, { gstin: '27ABCDE1234F1Z5', auto_split: true, legal_name: 'CLIKS Digital Services Pvt. Ltd.' }, 'GST Settings retrieved');
+        return sendSuccess(res, { gstin: '', auto_split: true, legal_name: '' }, 'GST Settings retrieved');
     },
     updateSettings: async (req, res) => {
         return sendSuccess(res, req.body, 'GST Settings updated');
@@ -296,21 +300,28 @@ const gstController = {
             const pct = parseFloat(gst_rate) || 18;
             const calculatedTax = invAmt * (pct / 100);
 
+            // Check state logic (27 for Maharashtra example state)
+            const isIntra = vendor_gstin ? vendor_gstin.startsWith('27') : true;
+            const input_cgst = isIntra ? calculatedTax / 2 : 0;
+            const input_sgst = isIntra ? calculatedTax / 2 : 0;
+            const input_igst = isIntra ? 0 : calculatedTax;
+
             const result = await db.prepare(`
                 INSERT INTO gst_invoices (
                     user_id, vendor_gstin, vendor_name, invoice_amount, gst_percentage,
-                    input_cgst, input_sgst, eligible_itc, invoice_match_status,
+                    input_cgst, input_sgst, input_igst, eligible_itc, invoice_match_status,
                     mismatch_reason, is_reconciliation, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'true', ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'true', ?)
             `).run(
                 req.user.id, vendor_gstin || '27AAAAA1111A1Z1', vendor_name || 'Generic Vendor', invAmt, pct,
-                calculatedTax / 2, calculatedTax / 2, calculatedTax, match_status || 'matched',
+                input_cgst, input_sgst, input_igst, calculatedTax, match_status || 'matched',
                 match_status === 'mismatch' ? 'Mismatch logged by vendor upload' : 'None', now
             );
 
             const inserted = await db.prepare('SELECT * FROM gst_invoices WHERE id = ?').get(result.lastInsertRowid);
             return sendSuccess(res, inserted, 'Reconciliation entry logged successfully', 201);
         } catch (error) {
+            console.error('[GST Reconciliation Error]', error);
             return sendError(res, 'Reconciliation failed', 500);
         }
     },

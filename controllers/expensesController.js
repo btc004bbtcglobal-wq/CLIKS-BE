@@ -49,7 +49,11 @@ const initTableAndColumns = async () => {
         'spent_amount',
         'alert_status',
         'is_budget',
-        'is_blocked'
+        'is_blocked',
+        'recurring_type',
+        'next_due_date',
+        'auto_create',
+        'recurring_status'
     ];
     for (const col of columns) {
         try {
@@ -251,10 +255,12 @@ const expensesController = {
         return sendSuccess(res, req.body, 'Recurring expense created');
     },
     getRecurrings: async (req, res) => {
-        return sendSuccess(res, [
-            { id: 'REC-01', category_name: 'Rent', recurring_type: 'monthly', next_due_date: '2026-06-01', auto_create: 'Active', recurring_status: 'active', amount: 25000 },
-            { id: 'REC-02', category_name: 'Internet & SaaS', recurring_type: 'monthly', next_due_date: '2026-06-04', auto_create: 'Active', recurring_status: 'active', amount: 1500 }
-        ], 'Recurring automations retrieved');
+        try {
+            const list = await db.prepare("SELECT * FROM expenses WHERE user_id = ? AND is_recurring = 1 ORDER BY id DESC").all(req.user.id);
+            return sendSuccess(res, list, 'Recurring automations retrieved');
+        } catch (error) {
+            return sendError(res, 'Retrieve recurrings failed', 500);
+        }
     },
     updateRecurring: async (req, res) => {
         return sendSuccess(res, req.body, 'Recurring expense updated');
