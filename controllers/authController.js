@@ -1,10 +1,40 @@
-// const bcrypt = require('bcryptjs');
+const bcrypt = require('bcryptjs');
 // const { z } = require('zod');
 
 const db = require('../db/connection');
 const { sendSuccess } = require('../utils/response');
 const AppError = require('../utils/AppError');
 const TokenService = require('../utils/tokenService');
+
+// ── Standard Credential Login ────────────────────────────────────────────────
+const login = async (req, res) => {
+  const { identifier, password } = req.body;
+  if (!identifier || !password) {
+    throw new AppError('Identifier and password are required', 400, 'BAD_REQUEST');
+  }
+
+  const user = await db.prepare('SELECT * FROM users WHERE email = ? OR username = ?').get(identifier, identifier);
+  if (!user) throw new AppError('Invalid email or password', 401, 'UNAUTHORIZED');
+
+  if (user.password_hash === 'sso-managed') {
+    throw new AppError('Access via local credentials locked. Please log in through SSO.', 403, 'FORBIDDEN');
+  }
+
+  const isMatch = await bcrypt.compare(password, user.password_hash);
+  if (!isMatch) throw new AppError('Invalid email or password', 401, 'UNAUTHORIZED');
+
+  const { accessToken, refreshToken } = await TokenService.issueEnhancedTokens(user);
+
+  const safeUser = { 
+    id: user.id, 
+    username: user.username, 
+    email: user.email, 
+    role: user.role, 
+    created_at: user.created_at 
+  };
+  
+  return sendSuccess(res, { accessToken, refreshToken, user: safeUser }, 'Credential authentication successful', 200);
+};
 
 // ── Zod Schemas ───────────────────────────────────────────────────────────────
 // ── SSO Login Gateway ────────────────────────────────────────────────────────
@@ -116,4 +146,5 @@ const logoutAll = async (req, res) => {
   return sendSuccess(res, null, 'Logged out of all sessions successfully');
 };
 
-module.exports = { ssoLogin, refresh, logout, logoutAll };
+module.exports = { login, ssoLogin, refresh, logout, logoutAll };
+
