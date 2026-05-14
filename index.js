@@ -27,7 +27,7 @@ process.on('uncaughtException', (error) => {
 });
 
 const { runMigrations } = require('./db/migrations');
-const { seedDefaultUser } = require('./db/seed');
+const { seedDefaultUser, seedSalesAgent, seedPlatformAdmin } = require('./db/seed');
 const app = require('./app');
 
 const PORT = parseInt(process.env.PORT || '8000', 10);
@@ -36,8 +36,11 @@ async function startServer() {
   try {
     await runMigrations();
     await seedDefaultUser();
+    await seedSalesAgent();
+    await seedPlatformAdmin();
 
     const server = app.listen(PORT, () => {
+
       logger.info(`🚀 Books & Finance API`);
       logger.info(`   ENV  : ${process.env.NODE_ENV || 'development'}`);
       logger.info(`   URL  : http://localhost:${PORT}/api/v1`);

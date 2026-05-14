@@ -1304,8 +1304,18 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   created_at TEXT
 );
 
+-- Global Platform Administration Registry
+CREATE TABLE IF NOT EXISTS platform_admins (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  email TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  created_at TEXT
+);
+
 -- Multi-Agent Enterprise Sales Pipeline Management
 CREATE TABLE IF NOT EXISTS sales_agents (
+
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
   email TEXT UNIQUE NOT NULL,
