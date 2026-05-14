@@ -348,15 +348,48 @@ const purchaseController = {
     processStockUpdate: async (req, res) => {
         const { id } = req.params;
         const { items } = req.body;
+        const userId = req.user.id;
+        const now = new Date().toISOString();
         try {
             if (items && Array.isArray(items)) {
                 for (const item of items) {
-                    await db.prepare('UPDATE business_purchase_items SET received_quantity = received_quantity + ? WHERE purchase_id = ? AND product_name = ?').run(item.received_quantity, id, item.product_name);
+                    const delta = parseFloat(item.delta_received) || 0;
+                    if (delta <= 0) continue;
+
+                    // 1. Update the Purchase Order items received count
+                    await db.prepare('UPDATE business_purchase_items SET received_quantity = received_quantity + ? WHERE purchase_id = ? AND product_name = ?').run(delta, id, item.product_name);
+
+                    // 2. If linked to a product, update physical inventory
+                    const prodId = item.product_id;
+                    if (prodId) {
+                        const prod = await db.prepare('SELECT quantity, low_stock_threshold FROM business_products WHERE id = ? AND user_id = ?').get(prodId, userId);
+                        if (prod) {
+                            const currentQty = parseFloat(prod.quantity) || 0;
+                            const newQty = currentQty + delta;
+                            const threshold = parseFloat(prod.low_stock_threshold) || 5;
+                            const newStatus = newQty <= 0 ? 'Out of Stock' : (newQty < threshold ? 'Low Stock' : 'In Stock');
+
+                            await db.prepare(`
+                                UPDATE business_products 
+                                SET quantity = ?, stock_status = ?, updated_at = ? 
+                                WHERE id = ? AND user_id = ?
+                            `).run(newQty, newStatus, now, prodId, userId);
+
+                            // 3. Log to physical stock history ledger
+                            const poRef = await db.prepare('SELECT purchase_number FROM business_purchases WHERE id = ?').get(id);
+                            const refNum = poRef ? poRef.purchase_number : 'N/A';
+                            await db.prepare(`
+                                INSERT INTO product_stock_history (product_id, user_id, quantity_changed, type, description, created_at)
+                                VALUES (?, ?, ?, ?, ?, ?)
+                            `).run(prodId, userId, delta, 'in', `Received via PO: ${refNum}`, now);
+                        }
+                    }
                 }
             }
-            return sendSuccess(res, null, 'Stock counts updated successfully');
+            return sendSuccess(res, null, 'Physical stock levels and inward logs successfully processed.');
         } catch (error) {
-            return sendError(res, 'Failed to update stocks', 500);
+            console.error('[Purchase Controller] Error in physical stock update:', error);
+            return sendError(res, 'Failed to update physical inventory stocks', 500);
         }
     },
 

@@ -80,6 +80,8 @@ app.get('/api/v1/health', (req, res) =>
 
 // ── Auth (no middleware) ──────────────────────────────────────────────────────
 app.use('/api/v1/auth', require('./routes/auth'));
+app.use('/api/v1/admin/auth', require('./routes/adminAuth'));
+
 
 // ── Public Feed (selective auth inside route file) ────────────────────────────
 app.use('/api/v1/public', require('./routes/public'));
@@ -139,6 +141,7 @@ app.use('/api/v1/split-expenses',   auth, require('./routes/splitExpense'));
 app.use('/api/v1/business',         auth, require('./routes/business'));
 app.use('/api/v1/inventory',        auth, require('./routes/inventory'));
 app.use('/api/v1/billing',          auth, require('./routes/billing'));
+app.use('/api/v1/pos',              auth, require('./routes/pos'));
 app.use('/api/v1/crm',              auth, require('./routes/customers'));
 app.use('/api/v1/customers',        auth, require('./routes/customers'));
 app.use('/api/v1/orders',           auth, require('./routes/orders'));

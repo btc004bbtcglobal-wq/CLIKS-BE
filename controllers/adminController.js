@@ -7,12 +7,19 @@ const getUsers = async (req, res) => {
   const { page = 1, limit = 20 } = req.query;
   const offset = (page - 1) * limit;
 
-  const users = await db.prepare(
-    'SELECT id, username, email, role, created_at FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?'
-  ).all(limit, offset);
+  const users = await db.prepare(`
+    SELECT 
+      u.id, u.username, u.email, u.role, u.created_at, u.business_name,
+      u.is_active, u.license_tier,
+      (SELECT COALESCE(SUM(total_amount), 0) FROM business_invoices WHERE user_id = u.id) as total_arr
+    FROM users u
+    ORDER BY u.created_at DESC
+    LIMIT ? OFFSET ?
+  `).all(limit, offset);
 
   return sendSuccess(res, users, 'Users fetched successfully', 200);
 };
+
 
 // ── DELETE /users/:id — Delete user ──────────────────────────────────────
 const deleteUser = async (req, res) => {

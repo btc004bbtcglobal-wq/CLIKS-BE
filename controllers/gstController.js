@@ -166,6 +166,15 @@ const gstController = {
             return sendError(res, 'Retrieve failed', 500);
         }
     },
+    deleteInvoice: async (req, res) => {
+        const { id } = req.params;
+        try {
+            await db.prepare('DELETE FROM gst_invoices WHERE id = ? AND user_id = ?').run(id, req.user.id);
+            return sendSuccess(res, null, 'GST record deleted successfully');
+        } catch (error) {
+            return sendError(res, 'Failed to delete GST record', 500);
+        }
+    },
     getPurchases: async (req, res) => {
         return sendSuccess(res, [], 'Purchases retrieved');
     },

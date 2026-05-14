@@ -12,7 +12,6 @@ const initColumns = async () => {
     ];
     for (const col of columns) {
         try {
-            const colName = col.split(' ')[0];
             await db.prepare(`ALTER TABLE business_payments ADD COLUMN ${col}`).run();
         } catch (e) {}
     }

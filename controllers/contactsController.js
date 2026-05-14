@@ -24,7 +24,7 @@ const createContact = async (req, res) => {
   const { name, email, phone, company, type, address, notes } = req.body;
   if (!name) return sendError(res, 'Name is required', 400, 'BAD_REQUEST');
 
-  const now = new Date().toISOString();
+  const now = new Date().toISOString();          
   const stmt = db.prepare(`
     INSERT INTO contacts (user_id, name, email, phone, company, type, address, notes, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

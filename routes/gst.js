@@ -25,6 +25,7 @@ router.put('/hsn-sac/:id', gstController.updateHsnSac);
 router.delete('/hsn-sac/:id', gstController.deleteHsnSac);
 
 router.get('/invoices', gstController.getInvoices);
+router.delete('/invoices/:id', gstController.deleteInvoice);
 router.get('/purchases', gstController.getPurchases);
 router.get('/returns', gstController.getReturns);
 

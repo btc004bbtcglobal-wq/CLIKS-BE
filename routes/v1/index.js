@@ -25,8 +25,12 @@ router.use('/auth',    require('../auth'));
 // ── Public Feed ────────────────────────────────────────────────────────────
 router.use('/public',  require('../public'));
 
+// ── Admin Auth (Decoupled & Public) ────────────────────────────────────────
+router.use('/admin/auth', require('../adminAuth'));
+
 // ── Admin (auth + RBAC handled inside route file) ─────────────────────────
 router.use('/admin',   require('../admin'));
+
 
 // ── Personal ──────────────────────────────────────────────────────────────
 router.use('/profile', auth, require('../profile'));
