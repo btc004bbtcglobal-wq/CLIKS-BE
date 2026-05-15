@@ -490,7 +490,19 @@ CREATE TABLE IF NOT EXISTS meetups (
   icon TEXT DEFAULT 'Users',
   gradient TEXT DEFAULT 'linear-gradient(135deg, #1B6B3A 0%, #22C55E 100%)',
   attendees INTEGER DEFAULT 1,
+  max_seats INTEGER DEFAULT 100,
   created_at TEXT,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Meetup Registrations (Tracks seat bookings to prevent dupes)
+CREATE TABLE IF NOT EXISTS meetup_registrations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  meetup_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  created_at TEXT,
+  UNIQUE(meetup_id, user_id),
+  FOREIGN KEY(meetup_id) REFERENCES meetups(id),
   FOREIGN KEY(user_id) REFERENCES users(id)
 );
 
@@ -1339,6 +1351,27 @@ CREATE TABLE IF NOT EXISTS sales_leads (
   created_at TEXT,
   updated_at TEXT
 );
+
+-- Venture Pitches Hub
+CREATE TABLE IF NOT EXISTS venture_pitches (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  business_name TEXT NOT NULL,
+  industry TEXT,
+  funding_target REAL NOT NULL,
+  raised_amount REAL DEFAULT 0,
+  equity_offered REAL,
+  headline TEXT NOT NULL,
+  pitch_deck_url TEXT,
+  use_of_funds TEXT,
+  is_verified INTEGER DEFAULT 0,
+  listing_status TEXT DEFAULT 'DRAFT',
+  payment_reference TEXT,
+  founder_phone TEXT,
+  founder_email TEXT,
+  created_at TEXT,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
   `;
 
   if (dbType === 'postgres') {
@@ -1488,7 +1521,36 @@ CREATE TABLE IF NOT EXISTS sales_leads (
         date TEXT,
         created_at TEXT,
         FOREIGN KEY(plan_id) REFERENCES business_plans(id) ON DELETE CASCADE
-      );`
+      );`,
+      `CREATE TABLE IF NOT EXISTS venture_pitches (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        business_name VARCHAR(255) NOT NULL,
+        industry VARCHAR(100),
+        funding_target NUMERIC NOT NULL,
+        raised_amount NUMERIC DEFAULT 0,
+        equity_offered NUMERIC,
+        headline VARCHAR(255) NOT NULL,
+        pitch_deck_url TEXT,
+        use_of_funds TEXT,
+        is_verified BOOLEAN DEFAULT FALSE,
+        listing_status VARCHAR(50) DEFAULT 'DRAFT',
+        payment_reference VARCHAR(100),
+        founder_phone VARCHAR(50),
+        founder_email VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_id) REFERENCES users(id)
+      );`,
+      `ALTER TABLE meetups ADD COLUMN IF NOT EXISTS max_seats INTEGER DEFAULT 100;`,
+      `CREATE TABLE IF NOT EXISTS meetup_registrations (
+        id SERIAL PRIMARY KEY,
+        meetup_id INTEGER NOT NULL REFERENCES meetups(id),
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(meetup_id, user_id)
+      );`,
+      `ALTER TABLE venture_pitches ADD COLUMN IF NOT EXISTS founder_phone VARCHAR(50);`,
+      `ALTER TABLE venture_pitches ADD COLUMN IF NOT EXISTS founder_email VARCHAR(255);`
     ];
     try {
       for (const q of pgAlters) await db.pool.query(q);
@@ -1572,7 +1634,9 @@ CREATE TABLE IF NOT EXISTS sales_leads (
       'ALTER TABLE gst_invoices ADD COLUMN status TEXT DEFAULT \'Active\'',
       'ALTER TABLE gst_invoices ADD COLUMN reference_invoice TEXT',
       'ALTER TABLE gst_invoices ADD COLUMN is_eway_bill TEXT DEFAULT \'false\'',
-      'ALTER TABLE gst_invoices ADD COLUMN is_reconciliation TEXT DEFAULT \'false\''
+      'ALTER TABLE gst_invoices ADD COLUMN is_reconciliation TEXT DEFAULT \'false\'',
+      'ALTER TABLE venture_pitches ADD COLUMN founder_phone TEXT',
+      'ALTER TABLE venture_pitches ADD COLUMN founder_email TEXT'
     ];
 
     alterQueries.forEach(query => {

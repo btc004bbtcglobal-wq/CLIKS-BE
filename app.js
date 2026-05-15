@@ -90,6 +90,7 @@ app.use('/api/v1/admin/auth', require('./routes/adminAuth'));
 // ── Public Feed (selective auth inside route file) ────────────────────────────
 app.use('/api/v1/public', require('./routes/public'));
 app.use('/api/v1/meetups', require('./routes/meetups'));
+app.use('/api/v1/pitches', require('./routes/pitches'));
 
 // ── Protected Routes ──────────────────────────────────────────────────────────
 

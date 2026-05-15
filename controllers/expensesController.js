@@ -98,6 +98,7 @@ const expensesController = {
             const list = await db.prepare(sql).all(...params);
             return sendSuccess(res, list, 'Expenses retrieved successfully');
         } catch (error) {
+            console.error('[Expense GET] Error:', error);
             return sendError(res, 'Retrieve failed', 500);
         }
     },
@@ -114,12 +115,12 @@ const expensesController = {
 
             const result = await db.prepare(`
                 INSERT INTO expenses (
-                    user_id, expense_number, expense_date, expense_status, category_name, subcategory,
+                    user_id, amount, expense_number, expense_date, expense_status, category_name, subcategory,
                     payee_name, payee_phone, payee_gstin, expense_amount, gst_percentage, subtotal, tax_amount,
                     payment_mode, transaction_reference, input_tax_credit, created_at, updated_at
-                ) VALUES (?, ?, ?, 'paid', ?, ?, ?, '+91 xxxxx xxxxx', '27XXXXX0000X0Z0', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, 'paid', ?, ?, ?, '+91 xxxxx xxxxx', '27XXXXX0000X0Z0', ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `).run(
-                req.user.id, expNum, now.split('T')[0], category_name || 'General', subcategory || 'Service Description',
+                req.user.id, amt, expNum, now.split('T')[0], category_name || 'General', subcategory || 'Service Description',
                 payee_name || 'Vendor Profile', amt, gst, sub, tax, payment_mode || 'UPI', transaction_reference || 'TXN-908122',
                 gst > 0 ? 'Eligible (ITC Claimed)' : 'Not Applicable', now, now
             );
@@ -229,15 +230,17 @@ const expensesController = {
         const { employee_name, travel_expense, claim_amount } = req.body;
         try {
             const now = new Date().toISOString();
+            const val = parseFloat(claim_amount) || 0;
             const result = await db.prepare(`
                 INSERT INTO expenses (
-                    user_id, employee_name, travel_expense, claim_amount, reimbursement_status, is_claim, date, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, 'Pending', 'true', ?, ?, ?)
-            `).run(req.user.id, employee_name, travel_expense, parseFloat(claim_amount) || 0, now.split('T')[0], now, now);
+                    user_id, amount, employee_name, travel_expense, claim_amount, reimbursement_status, is_claim, date, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, 'Pending', 'true', ?, ?, ?)
+            `).run(req.user.id, val, employee_name, travel_expense, val, now.split('T')[0], now, now);
 
             const inserted = await db.prepare('SELECT * FROM expenses WHERE id = ?').get(result.lastInsertRowid);
             return sendSuccess(res, inserted, 'Reimbursement claim lodged successfully', 201);
         } catch (error) {
+            console.error('[Expense Reimburse] Error:', error);
             return sendError(res, 'Lodge claim failed', 500);
         }
     },
@@ -274,15 +277,17 @@ const expensesController = {
         const { category_name, budget_limit } = req.body;
         try {
             const now = new Date().toISOString();
+            const limit = parseFloat(budget_limit) || 5000;
             const result = await db.prepare(`
                 INSERT INTO expenses (
-                    user_id, category_name, budget_limit, spent_amount, alert_status, is_budget, created_at, updated_at
-                ) VALUES (?, ?, ?, 0, 'Optimal', 'true', ?, ?)
-            `).run(req.user.id, category_name, parseFloat(budget_limit) || 5000, now, now);
+                    user_id, amount, category_name, budget_limit, spent_amount, alert_status, is_budget, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, 0, 'Optimal', 'true', ?, ?)
+            `).run(req.user.id, limit, category_name, limit, now, now);
 
             const inserted = await db.prepare('SELECT * FROM expenses WHERE id = ?').get(result.lastInsertRowid);
             return sendSuccess(res, inserted, 'Budget limit allocated', 201);
         } catch (error) {
+            console.error('[Expense Budget] Error:', error);
             return sendError(res, 'Set budget failed', 500);
         }
     },
