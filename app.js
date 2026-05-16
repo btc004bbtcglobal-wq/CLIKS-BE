@@ -91,6 +91,8 @@ app.use('/api/v1/admin/auth', require('./routes/adminAuth'));
 app.use('/api/v1/public', require('./routes/public'));
 app.use('/api/v1/meetups', require('./routes/meetups'));
 app.use('/api/v1/pitches', require('./routes/pitches'));
+app.use('/api/v1/mail', require('./routes/mail'));
+app.use('/api/v1/marketing', require('./routes/marketing'));
 
 // ── Protected Routes ──────────────────────────────────────────────────────────
 
