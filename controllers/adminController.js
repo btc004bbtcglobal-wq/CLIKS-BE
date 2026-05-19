@@ -487,6 +487,45 @@ const getGlobalLeads = async (req, res) => {
   }
 };
 
+// ── POST /admin/sales/leads — Admin logs a new prospect ─────────────────────────
+const createGlobalLead = async (req, res) => {
+  const { business_name, contact_name, email, phone, estimated_value, notes, agent_id } = req.body;
+
+  if (!business_name) {
+    return sendError(res, 'Target business vector name is mandatory.', 400);
+  }
+  if (!agent_id) {
+    return sendError(res, 'An assigned representative is mandatory.', 400);
+  }
+
+  const now = new Date().toISOString();
+  try {
+    const result = await db.prepare(`
+      INSERT INTO sales_leads (
+        agent_id, business_name, contact_name, email, phone, 
+        status, estimated_value, notes, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, 'NEW', ?, ?, ?, ?)
+    `).run([
+      agent_id, business_name, contact_name, email, phone, 
+      Number(estimated_value || 0), notes, now, now
+    ]);
+
+    const insertedId = result.lastInsertRowid;
+    const newLead = await db.prepare(`
+      SELECT l.*, a.name as agent_name, a.email as agent_email
+      FROM sales_leads l
+      LEFT JOIN sales_agents a ON l.agent_id = a.id
+      WHERE l.id = ?
+    `).get(insertedId);
+
+    return sendSuccess(res, newLead, 'Prospect recorded successfully in global active stream pipeline.', 201);
+  } catch (err) {
+    console.error('Failed to create lead by admin:', err);
+    return sendError(res, 'Target acquisition creation fault.', 500);
+  }
+};
+
+
 module.exports = { 
   getUsers, 
   deleteUser, 
@@ -508,7 +547,8 @@ module.exports = {
   getSalesAgents,
   createSalesAgent,
   toggleSalesAgentStatus,
-  getGlobalLeads
+  getGlobalLeads,
+  createGlobalLead
 };
 
 

@@ -9,10 +9,11 @@ const getSplitSummary = async (req, res) => {
       SELECT 
         name,
         SUM(CASE WHEN is_settled = 0 THEN share_amount ELSE 0 END) as total_owed,
-        COUNT(*) as split_count
+        SUM(CASE WHEN is_settled = 0 THEN 1 ELSE 0 END) as split_count
       FROM split_participants
       WHERE user_id = ?
       GROUP BY name
+      HAVING total_owed > 0
     `).all(req.user.id);
 
     return sendSuccess(res, participants, 'Split summary fetched');

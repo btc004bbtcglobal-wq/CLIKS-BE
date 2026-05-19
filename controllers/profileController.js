@@ -15,8 +15,25 @@ const safeUser = (user) => {
 
 // ── GET / — Return current user ───────────────────────────────────────────────
 const getProfile = async (req, res) => {
-  const user = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  let user;
+  if (req.user.role === 'admin') {
+    user = await db.prepare('SELECT * FROM platform_admins WHERE id = ?').get(req.user.id);
+  } else if (req.user.role === 'sales_agent') {
+    user = await db.prepare('SELECT * FROM sales_agents WHERE id = ?').get(req.user.id);
+  } else if (req.user.role === 'support_agent') {
+    user = await db.prepare('SELECT * FROM support_agents WHERE id = ?').get(req.user.id);
+  } else {
+    user = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  }
+
   if (!user) return sendError(res, 'User not found', 404, 'NOT_FOUND');
+  
+  if (req.user.role === 'admin' || req.user.role === 'sales_agent' || req.user.role === 'support_agent') {
+    const { password_hash: _password_hash, ...safe } = user;
+    safe.role = req.user.role;
+    return sendSuccess(res, safe);
+  }
+  
   return sendSuccess(res, safeUser(user));
 };
 
@@ -29,11 +46,24 @@ const updateProfile = async (req, res) => {
     return sendError(res, 'Provide at least one field to update', 400, 'BAD_REQUEST');
   }
 
-  const current = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  let table = 'users';
+  let nameField = 'username';
+  if (req.user.role === 'admin') {
+    table = 'platform_admins';
+    nameField = 'name';
+  } else if (req.user.role === 'sales_agent') {
+    table = 'sales_agents';
+    nameField = 'name';
+  } else if (req.user.role === 'support_agent') {
+    table = 'support_agents';
+    nameField = 'name';
+  }
+
+  const current = await db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(req.user.id);
   if (!current) return sendError(res, 'User not found', 404, 'NOT_FOUND');
 
   let avatar_url = null;
-  if (avatar_data && avatar_name) {
+  if (avatar_data && avatar_name && table === 'users') {
     try {
       const base64Data = avatar_data.replace(/^data:.*?;base64,/, '');
       const ext = path.extname(avatar_name) || '.png';
@@ -49,25 +79,34 @@ const updateProfile = async (req, res) => {
 
   // Check email uniqueness if changing
   if (email && email !== current.email) {
-    const existing = await db.prepare('SELECT id FROM users WHERE email = ? AND id != ?').get(email, req.user.id);
+    const existing = await db.prepare(`SELECT id FROM ${table} WHERE email = ? AND id != ?`).get(email, req.user.id);
     if (existing) return sendError(res, 'Email is already in use by another account', 409, 'CONFLICT');
   }
 
   const updates = [];
   const params = [];
 
-  if (targetUsername !== undefined) { updates.push('username = ?'); params.push(targetUsername); }
+  if (targetUsername !== undefined) { updates.push(`${nameField} = ?`); params.push(targetUsername); }
   if (email !== undefined)    { updates.push('email = ?');    params.push(email); }
   if (avatar_url)             { updates.push('avatar_url = ?'); params.push(avatar_url); }
 
-  updates.push('updated_at = ?');
-  params.push(new Date().toISOString());
+  if (table === 'users') {
+    updates.push('updated_at = ?');
+    params.push(new Date().toISOString());
+  }
   params.push(req.user.id);
 
-  await db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+  await db.prepare(`UPDATE ${table} SET ${updates.join(', ')} WHERE id = ?`).run(...params);
 
-  const updated = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
-  return sendSuccess(res, safeUser(updated), 'Profile updated');
+  const updated = await db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(req.user.id);
+  
+  if (table === 'users') {
+    return sendSuccess(res, safeUser(updated), 'Profile updated');
+  } else {
+    const { password_hash: _password_hash, ...safe } = updated;
+    safe.role = req.user.role;
+    return sendSuccess(res, safe, 'Profile updated');
+  }
 };
 
 // ── PATCH /change-password ────────────────────────────────────────────────────
@@ -78,15 +117,27 @@ const changePassword = async (req, res) => {
     return sendError(res, 'currentPassword and newPassword are required', 400, 'BAD_REQUEST');
   }
 
-  const user = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+  let table = 'users';
+  if (req.user.role === 'admin') {
+    table = 'platform_admins';
+  } else if (req.user.role === 'sales_agent') {
+    table = 'sales_agents';
+  }
+
+  const user = await db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(req.user.id);
   if (!user) return sendError(res, 'User not found', 404, 'NOT_FOUND');
 
   const valid = bcrypt.compareSync(currentPassword, user.password_hash);
   if (!valid) return sendError(res, 'Current password is incorrect', 401, 'UNAUTHORIZED');
 
   const newHash = bcrypt.hashSync(newPassword, 10);
-  db.prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?')
-    .run(newHash, new Date().toISOString(), req.user.id);
+  if (table === 'users') {
+    db.prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?')
+      .run(newHash, new Date().toISOString(), req.user.id);
+  } else {
+    db.prepare(`UPDATE ${table} SET password_hash = ? WHERE id = ?`)
+      .run(newHash, req.user.id);
+  }
 
   return sendSuccess(res, { message: 'Password updated' }, 'Password updated');
 };

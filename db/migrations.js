@@ -1383,6 +1383,32 @@ CREATE TABLE IF NOT EXISTS venture_pitches (
   created_at TEXT,
   FOREIGN KEY(user_id) REFERENCES users(id)
 );
+
+-- Global Customer Support Agent Registry
+CREATE TABLE IF NOT EXISTS support_agents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  email TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  is_active INTEGER DEFAULT 1,
+  created_at TEXT
+);
+
+-- Customer Support Tickets Tracking Grid
+CREATE TABLE IF NOT EXISTS support_tickets (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  subject TEXT NOT NULL,
+  description TEXT NOT NULL,
+  status TEXT DEFAULT 'OPEN',
+  priority TEXT DEFAULT 'MEDIUM',
+  agent_id INTEGER,
+  admin_note TEXT,
+  resolution_notes TEXT,
+  created_at TEXT,
+  updated_at TEXT,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
   `;
 
   if (dbType === 'postgres') {

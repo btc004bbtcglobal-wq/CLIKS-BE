@@ -102,6 +102,10 @@ app.use('/api/v1/admin',            require('./routes/admin'));
 // Platform Direct Marketing Reps
 app.use('/api/v1/sales-agent',      require('./routes/salesAgent'));
 
+// Customer Support Representatives & User Ticketing
+app.use('/api/v1/support-agent',    require('./routes/supportAgent'));
+app.use('/api/v1/support/tickets',  require('./routes/userSupport'));
+
 // Profile
 app.use('/api/v1/profile',          auth, require('./routes/profile'));
 

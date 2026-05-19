@@ -22,7 +22,8 @@ const {
   getSalesAgents,
   createSalesAgent,
   toggleSalesAgentStatus,
-  getGlobalLeads
+  getGlobalLeads,
+  createGlobalLead
 } = require('../controllers/adminController');
 
 // Apply auth and admin-only role checking to all routes within this file
@@ -79,6 +80,22 @@ router.get('/sales/agents', getSalesAgents);
 router.post('/sales/agents', createSalesAgent);
 router.patch('/sales/agents/:id/toggle', toggleSalesAgentStatus);
 router.get('/sales/leads', getGlobalLeads);
+router.post('/sales/leads', createGlobalLead);
+
+// Customer Support Management
+const {
+  getSupportAgents: getAdminSupportAgents,
+  createSupportAgent: createAdminSupportAgent,
+  toggleSupportAgent: toggleAdminSupportAgent,
+  getEscalatedTickets: getAdminEscalatedTickets,
+  resolveEscalatedTicket: resolveAdminEscalatedTicket
+} = require('../controllers/supportController');
+
+router.get('/support/agents', getAdminSupportAgents);
+router.post('/support/agents', createAdminSupportAgent);
+router.patch('/support/agents/:id/toggle', toggleAdminSupportAgent);
+router.get('/support/tickets', getAdminEscalatedTickets);
+router.patch('/support/tickets/:id/resolve', resolveAdminEscalatedTicket);
 
 module.exports = router;
 
