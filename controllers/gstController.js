@@ -358,11 +358,11 @@ const gstController = {
             // Outward supplies totals
             const outward = await db.prepare(`
                 SELECT 
-                    SUM(CAST(COALESCE(taxable_value, '0') AS REAL)) as sales, 
-                    SUM(CAST(COALESCE(cgst_amount, '0') AS REAL)) as cgst, 
-                    SUM(CAST(COALESCE(sgst_amount, '0') AS REAL)) as sgst, 
-                    SUM(CAST(COALESCE(igst_amount, '0') AS REAL)) as igst, 
-                    SUM(CAST(COALESCE(total_tax, '0') AS REAL)) as total_tax
+                    SUM(CAST(COALESCE(taxable_value, '0') AS real)) as sales, 
+                    SUM(CAST(COALESCE(cgst_amount, '0') AS real)) as cgst, 
+                    SUM(CAST(COALESCE(sgst_amount, '0') AS real)) as sgst, 
+                    SUM(CAST(COALESCE(igst_amount, '0') AS real)) as igst, 
+                    SUM(CAST(COALESCE(total_tax, '0') AS real)) as total_tax
                 FROM gst_invoices 
                 WHERE user_id = ? AND (is_eway_bill IS NULL OR is_eway_bill = 'false') AND (is_reconciliation IS NULL OR is_reconciliation = 'false')
             `).get(req.user.id);
@@ -370,11 +370,11 @@ const gstController = {
             // Inward supplies (Eligible ITC)
             const inward = await db.prepare(`
                 SELECT 
-                    SUM(CAST(COALESCE(invoice_amount, '0') AS REAL)) as purchases, 
-                    SUM(CAST(COALESCE(input_cgst, '0') AS REAL)) as input_cgst, 
-                    SUM(CAST(COALESCE(input_sgst, '0') AS REAL)) as input_sgst, 
-                    SUM(CAST(COALESCE(input_igst, '0') AS REAL)) as input_igst, 
-                    SUM(CAST(COALESCE(eligible_itc, '0') AS REAL)) as itc
+                    SUM(CAST(COALESCE(invoice_amount, '0') AS real)) as purchases, 
+                    SUM(CAST(COALESCE(input_cgst, '0') AS real)) as input_cgst, 
+                    SUM(CAST(COALESCE(input_sgst, '0') AS real)) as input_sgst, 
+                    SUM(CAST(COALESCE(input_igst, '0') AS real)) as input_igst, 
+                    SUM(CAST(COALESCE(eligible_itc, '0') AS real)) as itc
                 FROM gst_invoices
                 WHERE user_id = ? AND is_reconciliation = 'true' AND invoice_match_status = 'matched'
             `).get(req.user.id);
@@ -406,16 +406,16 @@ const gstController = {
             // Annual aggregate query
             const outward = await db.prepare(`
                 SELECT 
-                    SUM(CAST(COALESCE(taxable_value, '0') AS REAL)) as sales, 
-                    SUM(CAST(COALESCE(total_tax, '0') AS REAL)) as total_tax
+                    SUM(CAST(COALESCE(taxable_value, '0') AS real)) as sales, 
+                    SUM(CAST(COALESCE(total_tax, '0') AS real)) as total_tax
                 FROM gst_invoices 
                 WHERE user_id = ? AND (is_eway_bill IS NULL OR is_eway_bill = 'false') AND (is_reconciliation IS NULL OR is_reconciliation = 'false')
             `).get(req.user.id);
 
             const inward = await db.prepare(`
                 SELECT 
-                    SUM(CAST(COALESCE(invoice_amount, '0') AS REAL)) as purchases, 
-                    SUM(CAST(COALESCE(eligible_itc, '0') AS REAL)) as itc
+                    SUM(CAST(COALESCE(invoice_amount, '0') AS real)) as purchases, 
+                    SUM(CAST(COALESCE(eligible_itc, '0') AS real)) as itc
                 FROM gst_invoices
                 WHERE user_id = ? AND is_reconciliation = 'true' AND invoice_match_status = 'matched'
             `).get(req.user.id);
