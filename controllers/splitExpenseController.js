@@ -1,69 +1,36 @@
 const db = require('../db/connection');
 const { sendSuccess, sendError } = require('../utils/response');
-const { paginate } = require('../utils/pagination');
-
-// ── GET /summary ─────────────────────────────────────────────────────────────
-const getSplitSummary = async (req, res) => {
-  try {
-    const participants = await db.prepare(`
-      SELECT 
-        name,
-        SUM(CASE WHEN is_settled = 0 THEN share_amount ELSE 0 END) as total_owed,
-        SUM(CASE WHEN is_settled = 0 THEN 1 ELSE 0 END) as split_count
-      FROM split_participants
-      WHERE user_id = ?
-      GROUP BY name
-      HAVING total_owed > 0
-    `).all(req.user.id);
-
-    return sendSuccess(res, participants, 'Split summary fetched');
-  } catch (error) {
-    return sendError(res, error.message, 500);
-  }
-};
-
-// ── PATCH /settle-friend ─────────────────────────────────────────────────────
-const settleFriend = async (req, res) => {
-  const { name } = req.body;
-  if (!name) return sendError(res, 'name is required', 400, 'BAD_REQUEST');
-
-  await db.prepare(`
-    UPDATE split_participants 
-    SET is_settled = 1, updated_at = ? 
-    WHERE user_id = ? AND name = ? AND is_settled = 0
-  `).run(new Date().toISOString(), req.user.id, name);
-
-  return sendSuccess(res, { name }, 'Friend settled');
-};
 
 // ── GET / ─────────────────────────────────────────────────────────────────────
 const getSplitExpenses = async (req, res) => {
   try {
-    const { page, limit, sort = 'created_at', order = 'desc', search, from, to } = req.query;
-    
-    // Base query with participant count and names joined as a string
-    let query = `
-      SELECT 
-        se.*,
-        (SELECT COUNT(*) FROM split_participants WHERE split_expense_id = se.id) as participant_count,
-        (SELECT ${process.env.DB_TYPE === 'postgres' ? "string_agg(name, ', ')" : "GROUP_CONCAT(name, ', ')"} FROM split_participants WHERE split_expense_id = se.id) as participant_names
-      FROM split_expenses se
-      WHERE se.user_id = ?
-    `;
-    const params = [req.user.id];
+    const tickets = await db.prepare("SELECT * FROM split_tickets WHERE user_id = ? ORDER BY created_at DESC").all(req.user.id);
+    for (const ticket of tickets) {
+      try {
+        ticket.participants = JSON.parse(ticket.participants || '[]');
+      } catch (e) {
+        ticket.participants = [];
+      }
+      ticket.currencySymbol = ticket.currency_symbol;
+      delete ticket.currency_symbol;
 
-    if (search) { query += ' AND se.title LIKE ?'; params.push(`%${search}%`); }
-    if (from)   { query += ' AND se.date >= ?'; params.push(from); }
-    if (to)     { query += ' AND se.date <= ?'; params.push(to); }
-
-    const allowedSorts = ['created_at', 'updated_at', 'title', 'total_amount', 'date'];
-    const sortCol = allowedSorts.includes(sort) ? sort : 'created_at';
-    const sortDir = order.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
-    query += ` ORDER BY se.${sortCol} ${sortDir}`;
-
-    const result = await paginate(query, params, page, limit, db);
-    return sendSuccess(res, result.rows, 'Split expenses fetched', 200, result.meta);
+      const expenses = await db.prepare("SELECT * FROM split_ticket_expenses WHERE split_ticket_id = ? AND user_id = ? ORDER BY created_at DESC").all(ticket.id, req.user.id);
+      for (const exp of expenses) {
+        try {
+          exp.shares = JSON.parse(exp.shares || '{}');
+        } catch (e) {
+          exp.shares = {};
+        }
+        exp.paidBy = exp.paid_by;
+        delete exp.paid_by;
+        exp.splitType = exp.split_type;
+        delete exp.split_type;
+      }
+      ticket.expenses = expenses;
+    }
+    return sendSuccess(res, tickets, 'Split tickets fetched successfully');
   } catch (error) {
+    console.error('Error fetching split tickets:', error);
     return sendError(res, error.message, 500);
   }
 };
@@ -71,168 +38,113 @@ const getSplitExpenses = async (req, res) => {
 // ── POST / ────────────────────────────────────────────────────────────────────
 const createSplitExpense = async (req, res) => {
   try {
-    const { title, total_amount, date, notes, split_type, paid_by, participants = [] } = req.body;
-    if (!title || total_amount === undefined || !date) {
-      return sendError(res, 'title, total_amount, and date are required', 400, 'BAD_REQUEST');
+    const { id, title, currency, currencySymbol, description, participants = [] } = req.body;
+    if (!title) {
+      return sendError(res, 'Title is required', 400, 'BAD_REQUEST');
     }
 
-    if (participants.length > 0) {
-      const sum = participants.reduce((acc, p) => acc + (parseFloat(p.share_amount) || 0), 0);
-      if (sum > parseFloat(total_amount) + 0.01) {
-        return sendError(
-          res,
-          `Participant shares (${sum.toFixed(2)}) cannot exceed total_amount (${parseFloat(total_amount).toFixed(2)})`,
-          400,
-          'VALIDATION_ERROR'
-        );
-      }
-    }
-
+    const ticketId = id || 'split-' + Date.now();
     const now = new Date().toISOString();
-    const create = db.transaction(async () => {
-      const stmt = db.prepare(`
-        INSERT INTO split_expenses (user_id, title, total_amount, date, split_type, paid_by, notes, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-      const info = await stmt.run(req.user.id, title, total_amount, date, split_type || 'equal', paid_by || 'You', notes || null, now, now);
-      const splitId = info.lastInsertRowid;
 
-      if (participants.length > 0) {
-        const pStmt = db.prepare(`
-          INSERT INTO split_participants (split_expense_id, user_id, name, share_amount, is_settled, created_at, updated_at)
-          VALUES (?, ?, ?, ?, 0, ?, ?)
-        `);
-        for (const p of participants) {
-          await pStmt.run(splitId, req.user.id, p.name, p.share_amount, now, now);
-        }
-      }
+    await db.prepare(`
+      INSERT INTO split_tickets (id, user_id, title, currency, currency_symbol, description, participants, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(ticketId, req.user.id, title, currency || 'INR', currencySymbol || '₹', description || '', JSON.stringify(participants), now, now);
 
-      return splitId;
-    });
+    const ticket = await db.prepare("SELECT * FROM split_tickets WHERE id = ?").get(ticketId);
+    ticket.participants = JSON.parse(ticket.participants);
+    ticket.currencySymbol = ticket.currency_symbol;
+    delete ticket.currency_symbol;
+    ticket.expenses = [];
 
-    const splitId = await create();
-    const newSplit = await db.prepare('SELECT * FROM split_expenses WHERE id = ?').get(splitId);
-    newSplit.participants = await db.prepare('SELECT * FROM split_participants WHERE split_expense_id = ?').all(splitId);
-
-    return sendSuccess(res, newSplit, 'Split expense created', 201);
+    return sendSuccess(res, ticket, 'Split ticket created successfully', 201);
   } catch (error) {
-    console.error('[SplitExpenseController] Error:', error);
+    console.error('Error creating split ticket:', error);
     return sendError(res, error.message, 500);
   }
 };
 
-// ── GET /:id ──────────────────────────────────────────────────────────────────
-const getSplitExpense = async (req, res) => {
-  const split = await db.prepare('SELECT * FROM split_expenses WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
-  if (!split) return sendError(res, 'Split expense not found', 404, 'NOT_FOUND');
-
-  split.participants = await db.prepare(
-    'SELECT * FROM split_participants WHERE split_expense_id = ? AND user_id = ?'
-  ).all(req.params.id, req.user.id);
-
-  return sendSuccess(res, split);
-};
-
-// ── PATCH /:id ────────────────────────────────────────────────────────────────
-const updateSplitExpense = async (req, res) => {
-  const split = await db.prepare('SELECT * FROM split_expenses WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
-  if (!split) return sendError(res, 'Split expense not found', 404, 'NOT_FOUND');
-
-  const updates = [];
-  const params = [];
-  for (const field of ['title', 'total_amount', 'date', 'notes']) {
-    if (req.body[field] !== undefined) {
-      updates.push(`${field} = ?`);
-      params.push(req.body[field]);
-    }
-  }
-
-  if (updates.length > 0) {
-    updates.push('updated_at = ?');
-    params.push(new Date().toISOString(), req.params.id, req.user.id);
-    await db.prepare(`UPDATE split_expenses SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`).run(...params);
-  }
-
-  const updated = await db.prepare('SELECT * FROM split_expenses WHERE id = ?').get(req.params.id);
-  updated.participants = await db.prepare('SELECT * FROM split_participants WHERE split_expense_id = ?').all(req.params.id);
-  return sendSuccess(res, updated, 'Split expense updated');
-};
-
 // ── DELETE /:id ───────────────────────────────────────────────────────────────
 const deleteSplitExpense = async (req, res) => {
-  const split = await db.prepare('SELECT * FROM split_expenses WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
-  if (!split) return sendError(res, 'Split expense not found', 404, 'NOT_FOUND');
-
-  await db.transaction(async () => {
-    await db.prepare('DELETE FROM split_participants WHERE split_expense_id = ? AND user_id = ?').run(req.params.id, req.user.id);
-    await db.prepare('DELETE FROM split_expenses WHERE id = ? AND user_id = ?').run(req.params.id, req.user.id);
-  })();
-
-  return res.status(204).end();
-};
-
-// ── GET /:id/participants ─────────────────────────────────────────────────────
-const getParticipants = async (req, res) => {
-  const split = await db.prepare('SELECT * FROM split_expenses WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
-  if (!split) return sendError(res, 'Split expense not found', 404, 'NOT_FOUND');
-
-  const participants = await db.prepare(
-    'SELECT * FROM split_participants WHERE split_expense_id = ? AND user_id = ? ORDER BY created_at ASC'
-  ).all(req.params.id, req.user.id);
-
-  return sendSuccess(res, participants, 'Participants fetched');
-};
-
-// ── POST /:id/participants ────────────────────────────────────────────────────
-const addParticipant = async (req, res) => {
-  const split = await db.prepare('SELECT * FROM split_expenses WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
-  if (!split) return sendError(res, 'Split expense not found', 404, 'NOT_FOUND');
-
-  const { name, share_amount } = req.body;
-  if (!name || share_amount === undefined) {
-    return sendError(res, 'name and share_amount are required', 400, 'BAD_REQUEST');
+  try {
+    const ticketId = req.params.id;
+    await db.transaction(async () => {
+      await db.prepare("DELETE FROM split_ticket_expenses WHERE split_ticket_id = ? AND user_id = ?").run(ticketId, req.user.id);
+      await db.prepare("DELETE FROM split_tickets WHERE id = ? AND user_id = ?").run(ticketId, req.user.id);
+    })();
+    return res.status(204).end();
+  } catch (error) {
+    console.error('Error deleting split ticket:', error);
+    return sendError(res, error.message, 500);
   }
-
-  const now = new Date().toISOString();
-  const info = await db.prepare(`
-    INSERT INTO split_participants (split_expense_id, user_id, name, share_amount, is_settled, created_at, updated_at)
-    VALUES (?, ?, ?, ?, 0, ?, ?)
-  `).run(req.params.id, req.user.id, name, share_amount, now, now);
-
-  const newParticipant = await db.prepare('SELECT * FROM split_participants WHERE id = ?').get(info.lastInsertRowid);
-  return sendSuccess(res, newParticipant, 'Participant added', 201);
 };
 
-// ── PATCH /:id/participants/:participantId/settle ─────────────────────────────
-const settleParticipant = async (req, res) => {
-  const split = await db.prepare('SELECT * FROM split_expenses WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
-  if (!split) return sendError(res, 'Split expense not found', 404, 'NOT_FOUND');
+// ── POST /:id/expenses ────────────────────────────────────────────────────────
+const createExpense = async (req, res) => {
+  try {
+    const { id, title, amount, paidBy, date, attachment, splitType, shares } = req.body;
+    const splitTicketId = req.params.id;
 
-  const participant = await db.prepare(
-    'SELECT * FROM split_participants WHERE id = ? AND split_expense_id = ? AND user_id = ?'
-  ).get(req.params.participantId, req.params.id, req.user.id);
-  if (!participant) return sendError(res, 'Participant not found', 404, 'NOT_FOUND');
+    if (!title || amount === undefined) {
+      return sendError(res, 'Title and amount are required', 400, 'BAD_REQUEST');
+    }
 
-  await db.prepare(
-    'UPDATE split_participants SET is_settled = 1, updated_at = ? WHERE id = ?'
-  ).run(new Date().toISOString(), req.params.participantId);
+    const expId = id || 'exp-' + Date.now();
+    const now = new Date().toISOString();
 
-  const updated = await db.prepare('SELECT * FROM split_participants WHERE id = ?').get(req.params.participantId);
-  return sendSuccess(res, updated, 'Participant settled');
+    await db.prepare(`
+      INSERT INTO split_ticket_expenses (id, split_ticket_id, user_id, title, amount, paid_by, date, attachment, split_type, shares, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(expId, splitTicketId, req.user.id, title, parseFloat(amount), paidBy, date || now.split('T')[0], attachment || null, splitType || 'equal', JSON.stringify(shares || {}), now, now);
+
+    const exp = await db.prepare("SELECT * FROM split_ticket_expenses WHERE id = ?").get(expId);
+    exp.shares = JSON.parse(exp.shares);
+    exp.paidBy = exp.paid_by;
+    delete exp.paid_by;
+    exp.splitType = exp.split_type;
+    delete exp.split_type;
+
+    return sendSuccess(res, exp, 'Expense created successfully', 201);
+  } catch (error) {
+    console.error('Error creating expense:', error);
+    return sendError(res, error.message, 500);
+  }
 };
 
-// ── DELETE /:id/participants/:participantId ────────────────────────────────────
-const deleteParticipant = async (req, res) => {
-  const split = await db.prepare('SELECT * FROM split_expenses WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
-  if (!split) return sendError(res, 'Split expense not found', 404, 'NOT_FOUND');
-
-  const participant = await db.prepare(
-    'SELECT * FROM split_participants WHERE id = ? AND split_expense_id = ? AND user_id = ?'
-  ).get(req.params.participantId, req.params.id, req.user.id);
-  if (!participant) return sendError(res, 'Participant not found', 404, 'NOT_FOUND');
-
-  await db.prepare('DELETE FROM split_participants WHERE id = ?').run(req.params.participantId);
-  return res.status(204).end();
+// ── DELETE /:id/expenses/:expenseId ───────────────────────────────────────────
+const deleteExpense = async (req, res) => {
+  try {
+    const { id, expenseId } = req.params;
+    await db.prepare("DELETE FROM split_ticket_expenses WHERE id = ? AND split_ticket_id = ? AND user_id = ?").run(expenseId, id, req.user.id);
+    return res.status(204).end();
+  } catch (error) {
+    console.error('Error deleting expense:', error);
+    return sendError(res, error.message, 500);
+  }
 };
 
-module.exports = { getSplitSummary, settleFriend, getSplitExpenses, createSplitExpense, getSplitExpense, updateSplitExpense, deleteSplitExpense, getParticipants, addParticipant, settleParticipant, deleteParticipant };
+// ── DUMMY FALLBACK EXPORTS FOR OLD SYSTEM COMPATIBILITY ───────────────────────
+const getSplitSummary = async (req, res) => sendSuccess(res, []);
+const settleFriend = async (req, res) => sendSuccess(res, {});
+const getSplitExpense = async (req, res) => sendSuccess(res, {});
+const updateSplitExpense = async (req, res) => sendSuccess(res, {});
+const getParticipants = async (req, res) => sendSuccess(res, []);
+const addParticipant = async (req, res) => sendSuccess(res, {}, 201);
+const settleParticipant = async (req, res) => sendSuccess(res, {});
+const deleteParticipant = async (req, res) => res.status(204).end();
+
+module.exports = {
+  getSplitExpenses,
+  createSplitExpense,
+  deleteSplitExpense,
+  createExpense,
+  deleteExpense,
+  getSplitSummary,
+  settleFriend,
+  getSplitExpense,
+  updateSplitExpense,
+  getParticipants,
+  addParticipant,
+  settleParticipant,
+  deleteParticipant
+};

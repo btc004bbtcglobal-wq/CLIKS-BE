@@ -1,6 +1,20 @@
 const express = require('express');
 const router = express.Router();
-const { getSplitSummary, settleFriend, getSplitExpenses, createSplitExpense, getSplitExpense, updateSplitExpense, deleteSplitExpense, getParticipants, addParticipant, settleParticipant, deleteParticipant } = require('../controllers/splitExpenseController');
+const {
+  getSplitSummary,
+  settleFriend,
+  getSplitExpenses,
+  createSplitExpense,
+  getSplitExpense,
+  updateSplitExpense,
+  deleteSplitExpense,
+  getParticipants,
+  addParticipant,
+  settleParticipant,
+  deleteParticipant,
+  createExpense,
+  deleteExpense
+} = require('../controllers/splitExpenseController');
 
 // ── Summary / helper routes (must be before /:id) ────────────────────────────
 
@@ -40,5 +54,13 @@ router.patch('/:id/participants/:participantId/settle', settleParticipant);
 
 // DELETE /split-expenses/:id/participants/:participantId       — Remove a participant from a split expense
 router.delete('/:id/participants/:participantId', deleteParticipant);
+
+// ── Split Ticket Expense sub-routes ───────────────────────────────────────────
+
+// POST   /split-expenses/:id/expenses                          — Add an expense item to a split ticket
+router.post('/:id/expenses', createExpense);
+
+// DELETE /split-expenses/:id/expenses/:expenseId               — Delete an expense item from a split ticket
+router.delete('/:id/expenses/:expenseId', deleteExpense);
 
 module.exports = router;

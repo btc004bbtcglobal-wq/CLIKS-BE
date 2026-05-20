@@ -424,6 +424,38 @@ CREATE TABLE IF NOT EXISTS split_participants (
   FOREIGN KEY(split_expense_id) REFERENCES split_expenses(id)
 );
 
+-- Split Tickets
+CREATE TABLE IF NOT EXISTS split_tickets (
+  id VARCHAR(255) PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  currency TEXT,
+  currency_symbol TEXT,
+  description TEXT,
+  participants TEXT,
+  created_at TEXT,
+  updated_at TEXT,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
+-- Split Ticket Expenses
+CREATE TABLE IF NOT EXISTS split_ticket_expenses (
+  id VARCHAR(255) PRIMARY KEY,
+  split_ticket_id VARCHAR(255) NOT NULL,
+  user_id INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  amount REAL,
+  paid_by TEXT,
+  date TEXT,
+  attachment TEXT,
+  split_type TEXT,
+  shares TEXT,
+  created_at TEXT,
+  updated_at TEXT,
+  FOREIGN KEY(split_ticket_id) REFERENCES split_tickets(id) ON DELETE CASCADE,
+  FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
 -- Public Posts
 CREATE TABLE IF NOT EXISTS public_posts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
