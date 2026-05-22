@@ -91,7 +91,7 @@ const paymentController = {
     },
 
     createCashfreeOrder: async (req, res) => {
-        const { amount, orderId } = req.body;
+        const { amount, orderId, currency } = req.body;
         if (!amount) return sendError(res, 'Amount is required', 400);
 
         try {
@@ -103,7 +103,7 @@ const paymentController = {
             const payload = {
                 order_id: orderId || `ORDER_${Date.now()}`,
                 order_amount: parseFloat(amount),
-                order_currency: 'INR',
+                order_currency: currency || 'INR',
                 customer_details: {
                     customer_id: `CUST_${req.user?.id || 'GUEST'}`,
                     customer_phone: req.user?.phone || '9999999999',
