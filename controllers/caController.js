@@ -635,7 +635,7 @@ const caController = {
                 status: item.status,
                 priority: item.priority,
                 dueDate: item.due_date,
-                askForDocument: Boolean(item.ask_for_document),
+                askForDocument: item.ask_for_document == 1 || item.ask_for_document === 'true' || item.ask_for_document === true,
                 attachedFile: item.attached_file
             }));
             return sendSuccess(res, mapped, 'Practice tasks retrieved');
