@@ -923,23 +923,44 @@ const caController = {
                 return sendError(res, 'This user is already a member of your team.', 400);
             }
             
-            // Check if already requested
-            const requestExists = await db.prepare("SELECT * FROM ca_team_requests WHERE ca_user_id = ? AND LOWER(email) = ?").get(req.user.id, emailLower);
+            // Check if already requested (outgoing pending)
+            const requestExists = await db.prepare("SELECT * FROM ca_team_requests WHERE ca_user_id = ? AND LOWER(email) = ? AND type = 'Outgoing'").get(req.user.id, emailLower);
             if (requestExists) {
                 return sendError(res, 'An invitation has already been sent or is pending for this user.', 400);
             }
             
+            // Fetch Sender User details
+            const senderUser = await db.prepare("SELECT * FROM users WHERE id = ?").get(req.user.id);
+            
+            // Check if Receiver User exists in users table
+            const receiverUser = await db.prepare("SELECT * FROM users WHERE LOWER(email) = ?").get(emailLower);
+            
             const username = emailLower.split('@')[0];
-            const formattedName = username
+            const formattedName = (receiverUser && (receiverUser.business_name || receiverUser.username)) || username
                 .split('.')
                 .map(part => part.charAt(0).toUpperCase() + part.slice(1))
                 .join(' ') || 'External Consultant';
             
             const reqRole = role || 'Senior Tax Consultant';
+            
+            // 1. Insert OUTGOING request for Sender
             const result = await db.prepare(`
                 INSERT INTO ca_team_requests (ca_user_id, name, email, role, type, status)
                 VALUES (?, ?, ?, ?, 'Outgoing', 'Pending')
             `).run(req.user.id, formattedName, emailLower, reqRole);
+            
+            // 2. Insert INCOMING request for Receiver if they exist in the system
+            if (receiverUser) {
+                const senderName = senderUser.business_name || senderUser.username || senderUser.email.split('@')[0]
+                    .split('.')
+                    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+                    .join(' ') || 'Practice Member';
+                
+                await db.prepare(`
+                    INSERT INTO ca_team_requests (ca_user_id, name, email, role, type, status)
+                    VALUES (?, ?, ?, ?, 'Incoming', 'Pending')
+                `).run(receiverUser.id, senderName, senderUser.email, reqRole);
+            }
             
             const newReq = {
                 id: result.lastInsertRowid,
@@ -960,25 +981,46 @@ const caController = {
         try {
             await ensureSeededPracticeData(req.user.id);
             
-            const teamReq = await db.prepare("SELECT * FROM ca_team_requests WHERE id = ? AND ca_user_id = ?").get(id, req.user.id);
-            if (!teamReq) {
+            // Fetch the incoming request for B
+            const incomingReq = await db.prepare("SELECT * FROM ca_team_requests WHERE id = ? AND ca_user_id = ?").get(id, req.user.id);
+            if (!incomingReq) {
                 return sendError(res, 'Team request not found', 404);
             }
             
-            // Add to team members
+            const senderUser = await db.prepare("SELECT * FROM users WHERE LOWER(email) = ?").get(incomingReq.email.toLowerCase());
+            const receiverUser = await db.prepare("SELECT * FROM users WHERE id = ?").get(req.user.id);
+            
+            const senderName = (senderUser && (senderUser.business_name || senderUser.username)) || incomingReq.name;
+            const senderEmail = (senderUser && senderUser.email) || incomingReq.email;
+            
+            // 1. Add Sender A as team member in B's team
             const result = await db.prepare(`
                 INSERT INTO ca_team_members (ca_user_id, name, email, role, status)
                 VALUES (?, ?, ?, ?, 'Active')
-            `).run(req.user.id, teamReq.name, teamReq.email, teamReq.role);
+            `).run(receiverUser.id, senderName, senderEmail, incomingReq.role);
             
-            // Delete from requests
+            // 2. Add Receiver B as team member in A's team (if Sender A exists)
+            if (senderUser) {
+                const receiverName = receiverUser.business_name || receiverUser.username || receiverUser.email.split('@')[0];
+                await db.prepare(`
+                    INSERT INTO ca_team_members (ca_user_id, name, email, role, status)
+                    VALUES (?, ?, ?, ?, 'Active')
+                `).run(senderUser.id, receiverName, receiverUser.email, incomingReq.role);
+            }
+            
+            // 3. Delete B's incoming request
             await db.prepare("DELETE FROM ca_team_requests WHERE id = ?").run(id);
+            
+            // 4. Delete A's outgoing request (if Sender A exists)
+            if (senderUser) {
+                await db.prepare("DELETE FROM ca_team_requests WHERE ca_user_id = ? AND LOWER(email) = ? AND type = 'Outgoing'").run(senderUser.id, receiverUser.email.toLowerCase());
+            }
             
             const newMember = {
                 id: result.lastInsertRowid,
-                name: teamReq.name,
-                email: teamReq.email,
-                role: teamReq.role,
+                name: senderName,
+                email: senderEmail,
+                role: incomingReq.role,
                 status: 'Active'
             };
             
@@ -991,7 +1033,21 @@ const caController = {
     rejectTeamRequest: async (req, res) => {
         const { id } = req.params;
         try {
-            await db.prepare("DELETE FROM ca_team_requests WHERE id = ? AND ca_user_id = ?").run(id, req.user.id);
+            await ensureSeededPracticeData(req.user.id);
+            
+            const incomingReq = await db.prepare("SELECT * FROM ca_team_requests WHERE id = ? AND ca_user_id = ?").get(id, req.user.id);
+            if (incomingReq) {
+                const senderUser = await db.prepare("SELECT * FROM users WHERE LOWER(email) = ?").get(incomingReq.email.toLowerCase());
+                const receiverUser = await db.prepare("SELECT * FROM users WHERE id = ?").get(req.user.id);
+                
+                // Delete incoming request
+                await db.prepare("DELETE FROM ca_team_requests WHERE id = ?").run(id);
+                
+                // Delete outgoing request from A's database
+                if (senderUser) {
+                    await db.prepare("DELETE FROM ca_team_requests WHERE ca_user_id = ? AND LOWER(email) = ? AND type = 'Outgoing'").run(senderUser.id, receiverUser.email.toLowerCase());
+                }
+            }
             return sendSuccess(res, { id: parseInt(id) }, 'Team request rejected/declined');
         } catch (error) {
             console.error('[CA rejectTeamRequest Error]', error);
@@ -1001,7 +1057,21 @@ const caController = {
     cancelTeamRequest: async (req, res) => {
         const { id } = req.params;
         try {
-            await db.prepare("DELETE FROM ca_team_requests WHERE id = ? AND ca_user_id = ?").run(id, req.user.id);
+            await ensureSeededPracticeData(req.user.id);
+            
+            const outgoingReq = await db.prepare("SELECT * FROM ca_team_requests WHERE id = ? AND ca_user_id = ?").get(id, req.user.id);
+            if (outgoingReq) {
+                const receiverUser = await db.prepare("SELECT * FROM users WHERE LOWER(email) = ?").get(outgoingReq.email.toLowerCase());
+                const senderUser = await db.prepare("SELECT * FROM users WHERE id = ?").get(req.user.id);
+                
+                // Delete A's outgoing request
+                await db.prepare("DELETE FROM ca_team_requests WHERE id = ?").run(id);
+                
+                // Delete B's incoming request
+                if (receiverUser) {
+                    await db.prepare("DELETE FROM ca_team_requests WHERE ca_user_id = ? AND LOWER(email) = ? AND type = 'Incoming'").run(receiverUser.id, senderUser.email.toLowerCase());
+                }
+            }
             return sendSuccess(res, { id: parseInt(id) }, 'Team request cancelled');
         } catch (error) {
             console.error('[CA cancelTeamRequest Error]', error);
