@@ -1,3 +1,5 @@
+const path = require('path');
+const fs = require('fs');
 const db = require('../db/connection');
 const { sendSuccess, sendError } = require('../utils/response');
 
@@ -25,6 +27,7 @@ const getSplitExpenses = async (req, res) => {
         delete exp.paid_by;
         exp.splitType = exp.split_type;
         delete exp.split_type;
+        exp.amount = parseFloat(exp.amount) || 0;
       }
       ticket.expenses = expenses;
     }
@@ -103,6 +106,7 @@ const createExpense = async (req, res) => {
     delete exp.paid_by;
     exp.splitType = exp.split_type;
     delete exp.split_type;
+    exp.amount = parseFloat(exp.amount) || 0;
 
     return sendSuccess(res, exp, 'Expense created successfully', 201);
   } catch (error) {
@@ -119,6 +123,55 @@ const deleteExpense = async (req, res) => {
     return res.status(204).end();
   } catch (error) {
     console.error('Error deleting expense:', error);
+    return sendError(res, error.message, 500);
+  }
+};
+
+// ── PATCH /:id/expenses/:expenseId ───────────────────────────────────────────
+const updateExpense = async (req, res) => {
+  try {
+    const { id, expenseId } = req.params;
+    const { title, amount, paidBy, date, attachment, splitType, shares } = req.body;
+
+    if (!title || amount === undefined) {
+      return sendError(res, 'Title and amount are required', 400, 'BAD_REQUEST');
+    }
+
+    const now = new Date().toISOString();
+
+    await db.prepare(`
+      UPDATE split_ticket_expenses 
+      SET title = ?, amount = ?, paid_by = ?, date = ?, attachment = ?, split_type = ?, shares = ?, updated_at = ?
+      WHERE id = ? AND split_ticket_id = ? AND user_id = ?
+    `).run(
+      title, 
+      parseFloat(amount), 
+      paidBy, 
+      date || now.split('T')[0], 
+      attachment || null, 
+      splitType || 'equal', 
+      JSON.stringify(shares || {}), 
+      now, 
+      expenseId, 
+      id, 
+      req.user.id
+    );
+
+    const exp = await db.prepare("SELECT * FROM split_ticket_expenses WHERE id = ? AND split_ticket_id = ? AND user_id = ?").get(expenseId, id, req.user.id);
+    if (!exp) {
+      return sendError(res, 'Expense not found', 404, 'NOT_FOUND');
+    }
+
+    exp.shares = JSON.parse(exp.shares || '{}');
+    exp.paidBy = exp.paid_by;
+    delete exp.paid_by;
+    exp.splitType = exp.split_type;
+    delete exp.split_type;
+    exp.amount = parseFloat(exp.amount) || 0;
+
+    return sendSuccess(res, exp, 'Expense updated successfully');
+  } catch (error) {
+    console.error('Error updating expense:', error);
     return sendError(res, error.message, 500);
   }
 };
@@ -174,6 +227,31 @@ const updateSplitExpense = async (req, res) => {
   }
 };
 
+const uploadAttachment = async (req, res) => {
+  try {
+    const { name, content } = req.body;
+    if (!name || !content) {
+      return sendError(res, 'Filename and content are required', 400, 'BAD_REQUEST');
+    }
+
+    const safeFilename = Date.now() + '_' + path.basename(name).replace(/[^a-zA-Z0-9.-]/g, '_');
+    const uploadDir = path.join(__dirname, '../uploads');
+    
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+
+    const filePath = path.join(uploadDir, safeFilename);
+    const fileBuffer = Buffer.from(content, 'base64');
+    fs.writeFileSync(filePath, fileBuffer);
+
+    return sendSuccess(res, { filename: safeFilename, url: `/uploads/${safeFilename}` }, 'File uploaded successfully');
+  } catch (error) {
+    console.error('Upload error:', error);
+    return sendError(res, 'File upload failed: ' + error.message, 500);
+  }
+};
+
 const getParticipants = async (req, res) => sendSuccess(res, []);
 const addParticipant = async (req, res) => sendSuccess(res, {}, 201);
 const settleParticipant = async (req, res) => sendSuccess(res, {});
@@ -185,6 +263,8 @@ module.exports = {
   deleteSplitExpense,
   createExpense,
   deleteExpense,
+  updateExpense,
+  uploadAttachment,
   getSplitSummary,
   settleFriend,
   getSplitExpense,
@@ -194,3 +274,4 @@ module.exports = {
   settleParticipant,
   deleteParticipant
 };
+

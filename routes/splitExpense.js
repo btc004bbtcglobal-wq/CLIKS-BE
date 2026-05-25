@@ -13,7 +13,9 @@ const {
   settleParticipant,
   deleteParticipant,
   createExpense,
-  deleteExpense
+  deleteExpense,
+  updateExpense,
+  uploadAttachment
 } = require('../controllers/splitExpenseController');
 
 // ── Summary / helper routes (must be before /:id) ────────────────────────────
@@ -23,6 +25,9 @@ router.get('/summary', getSplitSummary);
 
 // PATCH /split-expenses/settle-friend                         — Mark all unsettled shares for a named friend as settled
 router.patch('/settle-friend', settleFriend);
+
+// POST  /split-expenses/upload                                — Upload a real document copy for expense attachments
+router.post('/upload', uploadAttachment);
 
 // ── Split expense CRUD ────────────────────────────────────────────────────────
 
@@ -62,5 +67,8 @@ router.post('/:id/expenses', createExpense);
 
 // DELETE /split-expenses/:id/expenses/:expenseId               — Delete an expense item from a split ticket
 router.delete('/:id/expenses/:expenseId', deleteExpense);
+
+// PATCH  /split-expenses/:id/expenses/:expenseId               — Update an expense item in a split ticket
+router.patch('/:id/expenses/:expenseId', updateExpense);
 
 module.exports = router;
