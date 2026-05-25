@@ -35,5 +35,14 @@ router.get('/documents/files', caController.getFiles);
 router.post('/documents/files', caController.addFile);
 router.delete('/documents/files/:id', caController.deleteFile);
 
+// Teams & Team Requests System
+router.get('/team-members', caController.getTeamMembers);
+router.delete('/team-members/:id', caController.removeTeamMember);
+router.get('/team-requests', caController.getTeamRequests);
+router.post('/team-requests', caController.addTeamRequest);
+router.post('/team-requests/:id/accept', caController.acceptTeamRequest);
+router.post('/team-requests/:id/reject', caController.rejectTeamRequest);
+router.delete('/team-requests/:id', caController.cancelTeamRequest);
+
 module.exports = router;
 

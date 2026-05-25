@@ -107,6 +107,29 @@ const initTableAndColumns = async () => {
                 date TEXT
             )
         `).run();
+
+        await db.prepare(`
+            CREATE TABLE IF NOT EXISTS ca_team_members (
+                id ${idType},
+                ca_user_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                email TEXT NOT NULL,
+                role TEXT,
+                status TEXT DEFAULT 'Active'
+            )
+        `).run();
+
+        await db.prepare(`
+            CREATE TABLE IF NOT EXISTS ca_team_requests (
+                id ${idType},
+                ca_user_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                email TEXT NOT NULL,
+                role TEXT,
+                type TEXT,
+                status TEXT DEFAULT 'Pending'
+            )
+        `).run();
     } catch (e) {
         console.error('[CA Dynamic Init Error]', e.message);
     }
@@ -216,6 +239,37 @@ const ensureSeededPracticeData = async (userId) => {
                     INSERT INTO ca_files (ca_user_id, name, size, folder_name, date)
                     VALUES (?, ?, ?, ?, ?)
                 `).run(userId, f.name, f.size, f.folder_name, f.date);
+            }
+        }
+
+        // 7. Team Members
+        const memberCount = await db.prepare("SELECT COUNT(*) as count FROM ca_team_members WHERE ca_user_id = ?").get(userId);
+        if (memberCount.count === 0) {
+            const defaultMembers = [
+                { name: 'Vikram Malhotra', email: 'vikram.malhotra@firm.com', role: 'Partner / Senior CA', status: 'Active' },
+                { name: 'Ananya Roy', email: 'ananya.roy@firm.com', role: 'Tax Associate', status: 'Active' },
+                { name: 'Rohan Sharma', email: 'rohan.sharma@firm.com', role: 'Audit Lead', status: 'Active' }
+            ];
+            for (const m of defaultMembers) {
+                await db.prepare(`
+                    INSERT INTO ca_team_members (ca_user_id, name, email, role, status)
+                    VALUES (?, ?, ?, ?, ?)
+                `).run(userId, m.name, m.email, m.role, m.status);
+            }
+        }
+
+        // 8. Team Requests
+        const teamReqCount = await db.prepare("SELECT COUNT(*) as count FROM ca_team_requests WHERE ca_user_id = ?").get(userId);
+        if (teamReqCount.count === 0) {
+            const defaultRequests = [
+                { name: 'Amit Patel', email: 'amit.patel@firm.com', role: 'CS Specialist', type: 'Incoming', status: 'Pending' },
+                { name: 'Sneha Reddy', email: 'sneha.reddy@firm.com', role: 'Audit Intern', type: 'Outgoing', status: 'Pending' }
+            ];
+            for (const r of defaultRequests) {
+                await db.prepare(`
+                    INSERT INTO ca_team_requests (ca_user_id, name, email, role, type, status)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                `).run(userId, r.name, r.email, r.role, r.type, r.status);
             }
         }
     } catch (err) {
@@ -823,6 +877,135 @@ const caController = {
         } catch (error) {
             console.error('[CA deleteFile Error]', error);
             return sendError(res, 'Failed to delete file', 500);
+        }
+    },
+    getTeamMembers: async (req, res) => {
+        try {
+            await ensureSeededPracticeData(req.user.id);
+            const list = await db.prepare("SELECT * FROM ca_team_members WHERE ca_user_id = ? ORDER BY id DESC").all(req.user.id);
+            return sendSuccess(res, list, 'Team members retrieved');
+        } catch (error) {
+            console.error('[CA getTeamMembers Error]', error);
+            return sendError(res, 'Failed to fetch team members', 500);
+        }
+    },
+    removeTeamMember: async (req, res) => {
+        const { id } = req.params;
+        try {
+            await db.prepare("DELETE FROM ca_team_members WHERE id = ? AND ca_user_id = ?").run(id, req.user.id);
+            return sendSuccess(res, { id: parseInt(id) }, 'Team member removed successfully');
+        } catch (error) {
+            console.error('[CA removeTeamMember Error]', error);
+            return sendError(res, 'Failed to remove team member', 500);
+        }
+    },
+    getTeamRequests: async (req, res) => {
+        try {
+            await ensureSeededPracticeData(req.user.id);
+            const list = await db.prepare("SELECT * FROM ca_team_requests WHERE ca_user_id = ? ORDER BY id DESC").all(req.user.id);
+            return sendSuccess(res, list, 'Team requests retrieved');
+        } catch (error) {
+            console.error('[CA getTeamRequests Error]', error);
+            return sendError(res, 'Failed to fetch team requests', 500);
+        }
+    },
+    addTeamRequest: async (req, res) => {
+        const { email, role } = req.body;
+        if (!email) return sendError(res, 'Email address is required', 400);
+        const emailLower = email.trim().toLowerCase();
+        
+        try {
+            await ensureSeededPracticeData(req.user.id);
+            
+            // Check if already a member
+            const memberExists = await db.prepare("SELECT * FROM ca_team_members WHERE ca_user_id = ? AND LOWER(email) = ?").get(req.user.id, emailLower);
+            if (memberExists) {
+                return sendError(res, 'This user is already a member of your team.', 400);
+            }
+            
+            // Check if already requested
+            const requestExists = await db.prepare("SELECT * FROM ca_team_requests WHERE ca_user_id = ? AND LOWER(email) = ?").get(req.user.id, emailLower);
+            if (requestExists) {
+                return sendError(res, 'An invitation has already been sent or is pending for this user.', 400);
+            }
+            
+            const username = emailLower.split('@')[0];
+            const formattedName = username
+                .split('.')
+                .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+                .join(' ') || 'External Consultant';
+            
+            const reqRole = role || 'Senior Tax Consultant';
+            const result = await db.prepare(`
+                INSERT INTO ca_team_requests (ca_user_id, name, email, role, type, status)
+                VALUES (?, ?, ?, ?, 'Outgoing', 'Pending')
+            `).run(req.user.id, formattedName, emailLower, reqRole);
+            
+            const newReq = {
+                id: result.lastInsertRowid,
+                name: formattedName,
+                email: emailLower,
+                role: reqRole,
+                type: 'Outgoing',
+                status: 'Pending'
+            };
+            return sendSuccess(res, newReq, 'Team invitation sent successfully');
+        } catch (error) {
+            console.error('[CA addTeamRequest Error]', error);
+            return sendError(res, 'Failed to send team invitation', 500);
+        }
+    },
+    acceptTeamRequest: async (req, res) => {
+        const { id } = req.params;
+        try {
+            await ensureSeededPracticeData(req.user.id);
+            
+            const teamReq = await db.prepare("SELECT * FROM ca_team_requests WHERE id = ? AND ca_user_id = ?").get(id, req.user.id);
+            if (!teamReq) {
+                return sendError(res, 'Team request not found', 404);
+            }
+            
+            // Add to team members
+            const result = await db.prepare(`
+                INSERT INTO ca_team_members (ca_user_id, name, email, role, status)
+                VALUES (?, ?, ?, ?, 'Active')
+            `).run(req.user.id, teamReq.name, teamReq.email, teamReq.role);
+            
+            // Delete from requests
+            await db.prepare("DELETE FROM ca_team_requests WHERE id = ?").run(id);
+            
+            const newMember = {
+                id: result.lastInsertRowid,
+                name: teamReq.name,
+                email: teamReq.email,
+                role: teamReq.role,
+                status: 'Active'
+            };
+            
+            return sendSuccess(res, { newMember, requestId: parseInt(id) }, 'Team request accepted');
+        } catch (error) {
+            console.error('[CA acceptTeamRequest Error]', error);
+            return sendError(res, 'Failed to accept team request', 500);
+        }
+    },
+    rejectTeamRequest: async (req, res) => {
+        const { id } = req.params;
+        try {
+            await db.prepare("DELETE FROM ca_team_requests WHERE id = ? AND ca_user_id = ?").run(id, req.user.id);
+            return sendSuccess(res, { id: parseInt(id) }, 'Team request rejected/declined');
+        } catch (error) {
+            console.error('[CA rejectTeamRequest Error]', error);
+            return sendError(res, 'Failed to reject team request', 500);
+        }
+    },
+    cancelTeamRequest: async (req, res) => {
+        const { id } = req.params;
+        try {
+            await db.prepare("DELETE FROM ca_team_requests WHERE id = ? AND ca_user_id = ?").run(id, req.user.id);
+            return sendSuccess(res, { id: parseInt(id) }, 'Team request cancelled');
+        } catch (error) {
+            console.error('[CA cancelTeamRequest Error]', error);
+            return sendError(res, 'Failed to cancel team request', 500);
         }
     }
 };
