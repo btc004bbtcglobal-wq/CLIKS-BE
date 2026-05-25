@@ -6,12 +6,14 @@ const {
   getWallet, 
   addMoney, 
   claimWallet, 
-  deleteWallet 
+  deleteWallet,
+  updateWallet
 } = require('../controllers/goalWalletController');
 
 router.get('/', getWallets);
 router.post('/', createWallet);
 router.get('/:id', getWallet);
+router.patch('/:id', updateWallet);
 router.post('/:id/add-money', addMoney);
 router.post('/:id/claim', claimWallet);
 router.delete('/:id', deleteWallet);

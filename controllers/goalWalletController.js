@@ -111,4 +111,22 @@ const deleteWallet = async (req, res) => {
   return res.status(204).end();
 };
 
-module.exports = { getWallets, createWallet, getWallet, addMoney, claimWallet, deleteWallet };
+const updateWallet = async (req, res) => {
+  const { name, target_amount, description, person_id } = req.body;
+  if (!name || target_amount === undefined) return sendError(res, 'Name and target_amount are required', 400, 'BAD_REQUEST');
+
+  const wallet = await db.prepare('SELECT * FROM goal_wallets WHERE id = ? AND user_id = ?').get(req.params.id, req.user.id);
+  if (!wallet) return sendError(res, 'Wallet not found', 404, 'NOT_FOUND');
+
+  const now = new Date().toISOString();
+  await db.prepare(`
+    UPDATE goal_wallets 
+    SET name = ?, target_amount = ?, description = ?, person_id = ?, updated_at = ?
+    WHERE id = ? AND user_id = ?
+  `).run(name, parseFloat(target_amount), description || null, person_id || null, now, req.params.id, req.user.id);
+
+  const updated = await db.prepare('SELECT * FROM goal_wallets WHERE id = ?').get(req.params.id);
+  return sendSuccess(res, updated, 'Wallet updated successfully');
+};
+
+module.exports = { getWallets, createWallet, getWallet, addMoney, claimWallet, deleteWallet, updateWallet };
