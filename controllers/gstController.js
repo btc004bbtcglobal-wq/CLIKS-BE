@@ -205,11 +205,11 @@ const gstController = {
 
             const result = await db.prepare(`
                 INSERT INTO gst_invoices (
-                    user_id, eway_bill_number, transporter_name, vehicle_number, transport_distance,
+                    user_id, invoice_number, client_name, eway_bill_number, transporter_name, vehicle_number, transport_distance,
                     dispatch_location, delivery_location, status, is_eway_bill, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'Active', 'true', ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Active', 'true', ?)
             `).run(
-                req.user.id, ewbNum, transporter_name || 'Bluedart Logistics', vehicle_number || 'MH-02-AB-1234',
+                req.user.id, ewbNum, transporter_name || 'Bluedart Logistics', ewbNum, transporter_name || 'Bluedart Logistics', vehicle_number || 'MH-02-AB-1234',
                 transport_distance || 100, dispatch_location || 'Warehouse A', delivery_location || 'Warehouse B', now
             );
 
@@ -315,14 +315,15 @@ const gstController = {
             const input_sgst = isIntra ? calculatedTax / 2 : 0;
             const input_igst = isIntra ? 0 : calculatedTax;
 
+            const recInvNum = `REC-2026-${Date.now().toString().slice(-4)}`;
             const result = await db.prepare(`
                 INSERT INTO gst_invoices (
-                    user_id, vendor_gstin, vendor_name, invoice_amount, gst_percentage,
+                    user_id, invoice_number, client_name, vendor_gstin, vendor_name, invoice_amount, gst_percentage,
                     input_cgst, input_sgst, input_igst, eligible_itc, invoice_match_status,
                     mismatch_reason, is_reconciliation, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'true', ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'true', ?)
             `).run(
-                req.user.id, vendor_gstin || '27AAAAA1111A1Z1', vendor_name || 'Generic Vendor', invAmt, pct,
+                req.user.id, recInvNum, vendor_name || 'Generic Vendor', vendor_gstin || '27AAAAA1111A1Z1', vendor_name || 'Generic Vendor', invAmt, pct,
                 input_cgst, input_sgst, input_igst, calculatedTax, match_status || 'matched',
                 match_status === 'mismatch' ? 'Mismatch logged by vendor upload' : 'None', now
             );
