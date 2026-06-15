@@ -564,7 +564,54 @@ const productController = {
 
     // 22. Bulk Import / Export
     importProducts: async (req, res) => {
-        return sendSuccess(res, null, 'Products imported successfully');
+        const { products } = req.body;
+        if (!products || !Array.isArray(products)) {
+            return sendError(res, 'Products array is required', 400);
+        }
+
+        try {
+            const now = new Date().toISOString();
+            const importTx = db.transaction(async () => {
+                const insertStmt = db.prepare(`
+                    INSERT INTO business_products (
+                        user_id, name, sku, category, status, stock_status, quantity, low_stock_threshold,
+                        purchase_price, selling_price, barcode, serial_number, batch_number, expiry_date,
+                        tax_percentage, warehouse_id, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, 'active', 'In Stock', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `);
+
+                for (const item of products) {
+                    if (!item.name) {
+                        throw new Error('Product name is required for all imported products');
+                    }
+                    await insertStmt.run(
+                        req.user.id,
+                        item.name,
+                        item.sku || null,
+                        item.category || null,
+                        item.quantity || 0,
+                        item.low_stock_threshold || 5,
+                        item.purchase_price || 0,
+                        item.selling_price || 0,
+                        item.barcode || null,
+                        item.serial_number || null,
+                        item.batch_number || null,
+                        item.expiry_date || null,
+                        item.tax_percentage || 18,
+                        item.warehouse_id || 'Main Godown',
+                        now,
+                        now
+                    );
+                }
+                return products.length;
+            });
+
+            const count = await importTx();
+            return sendSuccess(res, { count }, `${count} products imported successfully`);
+        } catch (error) {
+            console.error('[Product Controller] Error importing products:', error);
+            return sendError(res, error.message || 'Failed to import products', 500);
+        }
     },
 
     exportProducts: async (req, res) => {

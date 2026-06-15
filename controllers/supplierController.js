@@ -433,7 +433,47 @@ const supplierController = {
 
     // 15. Import / Export
     importSuppliers: async (req, res) => {
-        return sendSuccess(res, null, 'Suppliers imported successfully');
+        const { suppliers } = req.body;
+        if (!suppliers || !Array.isArray(suppliers)) {
+            return sendError(res, 'Suppliers array is required', 400);
+        }
+
+        try {
+            const now = new Date().toISOString();
+            const importTx = db.transaction(async () => {
+                const insertStmt = db.prepare(`
+                    INSERT INTO business_suppliers (
+                        user_id, name, email, phone, company, gstin, status, city, outstanding_balance, total_purchased, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)
+                `);
+
+                for (const item of suppliers) {
+                    if (!item.name) {
+                        throw new Error('Supplier name is required for all imported suppliers');
+                    }
+                    await insertStmt.run(
+                        req.user.id,
+                        item.name,
+                        item.email || null,
+                        item.phone || null,
+                        item.company || null,
+                        item.gstin || null,
+                        item.city || null,
+                        item.outstanding_balance || 0,
+                        item.total_purchased || 0,
+                        now,
+                        now
+                    );
+                }
+                return suppliers.length;
+            });
+
+            const count = await importTx();
+            return sendSuccess(res, { count }, `${count} suppliers imported successfully`);
+        } catch (error) {
+            console.error('[Supplier Controller] Error importing suppliers:', error);
+            return sendError(res, error.message || 'Failed to import suppliers', 500);
+        }
     },
 
     exportSuppliers: async (req, res) => {

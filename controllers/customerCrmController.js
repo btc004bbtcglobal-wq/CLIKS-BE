@@ -495,9 +495,51 @@ const customerCrmController = {
         }, 'Analytics fetched successfully');
     },
 
-    // 23. Import
     importCustomers: async (req, res) => {
-        return sendSuccess(res, null, 'Customers imported successfully');
+        const { customers } = req.body;
+        if (!customers || !Array.isArray(customers)) {
+            return sendError(res, 'Customers array is required', 400);
+        }
+
+        try {
+            const now = new Date().toISOString();
+            const importTx = db.transaction(async () => {
+                const insertStmt = db.prepare(`
+                    INSERT INTO business_customers (
+                        user_id, name, email, phone, phone_number, company, business_name, status, city, outstanding_balance, loyalty_points, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)
+                `);
+
+                for (const item of customers) {
+                    if (!item.name) {
+                        throw new Error('Customer name is required for all imported customers');
+                    }
+                    const customerPhone = item.phone || null;
+                    const customerComp = item.company || null;
+                    await insertStmt.run(
+                        req.user.id,
+                        item.name,
+                        item.email || null,
+                        customerPhone,
+                        customerPhone,
+                        customerComp,
+                        customerComp,
+                        item.city || null,
+                        item.outstanding_balance || 0,
+                        item.loyalty_points || 0,
+                        now,
+                        now
+                    );
+                }
+                return customers.length;
+            });
+
+            const count = await importTx();
+            return sendSuccess(res, { count }, `${count} customers imported successfully`);
+        } catch (error) {
+            console.error('[Customer CRM Controller] Error importing customers:', error);
+            return sendError(res, error.message || 'Failed to import customers', 500);
+        }
     },
 
     // 24. Export

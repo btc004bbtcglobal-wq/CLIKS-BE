@@ -39,10 +39,10 @@ const getProfile = async (req, res) => {
 
 // ── PATCH / — Update username, email, or avatar ───────────────────────────────
 const updateProfile = async (req, res) => {
-  const { username, email, name, avatar_data, avatar_name } = req.body;
+  const { username, email, name, avatar_data, avatar_name, tier, subscription_days_remaining } = req.body;
   const targetUsername = username || name;
 
-  if (!targetUsername && !email && !avatar_data) {
+  if (!targetUsername && !email && !avatar_data && tier === undefined && subscription_days_remaining === undefined) {
     return sendError(res, 'Provide at least one field to update', 400, 'BAD_REQUEST');
   }
 
@@ -91,6 +91,8 @@ const updateProfile = async (req, res) => {
   if (avatar_url)             { updates.push('avatar_url = ?'); params.push(avatar_url); }
 
   if (table === 'users') {
+    if (tier !== undefined) { updates.push('tier = ?'); params.push(tier); }
+    if (subscription_days_remaining !== undefined) { updates.push('subscription_days_remaining = ?'); params.push(subscription_days_remaining); }
     updates.push('updated_at = ?');
     params.push(new Date().toISOString());
   }

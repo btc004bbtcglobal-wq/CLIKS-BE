@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS users (
   industry TEXT,
   refresh_token TEXT,
   widgets TEXT, -- Added to persist dashboard configuration
+  tier TEXT DEFAULT 'Free Plan',
+  subscription_days_remaining INTEGER DEFAULT 0,
   created_at TEXT,
   updated_at TEXT
 );
@@ -1712,7 +1714,9 @@ CREATE TABLE IF NOT EXISTS support_tickets (
       'ALTER TABLE gst_invoices ADD COLUMN is_eway_bill TEXT DEFAULT \'false\'',
       'ALTER TABLE gst_invoices ADD COLUMN is_reconciliation TEXT DEFAULT \'false\'',
       'ALTER TABLE venture_pitches ADD COLUMN founder_phone TEXT',
-      'ALTER TABLE venture_pitches ADD COLUMN founder_email TEXT'
+      'ALTER TABLE venture_pitches ADD COLUMN founder_email TEXT',
+      'ALTER TABLE users ADD COLUMN tier TEXT DEFAULT \'Free Plan\'',
+      'ALTER TABLE users ADD COLUMN subscription_days_remaining INTEGER DEFAULT 0'
     ];
 
     alterQueries.forEach(query => {

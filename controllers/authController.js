@@ -55,8 +55,8 @@ const ssoLogin = async (req, res) => {
 
     try {
       const info = await db.prepare(
-        'INSERT INTO users (username, email, password_hash, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
-      ).run(finalUsername, email, hash, role, now, now);
+        'INSERT INTO users (username, email, password_hash, role, tier, subscription_days_remaining, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run(finalUsername, email, hash, role, 'Free Plan', 0, now, now);
 
       user = await db.prepare('SELECT id, username, email, role, created_at FROM users WHERE id = ?').get(info.lastInsertRowid || info.id || info[0]?.id);
     } catch (dbErr) {
@@ -64,8 +64,8 @@ const ssoLogin = async (req, res) => {
       if (dbErr.message.includes('UNIQUE constraint failed: users.username') || dbErr.message.includes('duplicate key value')) {
         finalUsername = `${username}_${Math.floor(Math.random() * 10000)}`;
         const info = await db.prepare(
-          'INSERT INTO users (username, email, password_hash, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
-        ).run(finalUsername, email, hash, role, now, now);
+          'INSERT INTO users (username, email, password_hash, role, tier, subscription_days_remaining, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+        ).run(finalUsername, email, hash, role, 'Free Plan', 0, now, now);
         user = await db.prepare('SELECT id, username, email, role, created_at FROM users WHERE id = ?').get(info.lastInsertRowid || info.id || info[0]?.id);
       } else {
         throw dbErr;
