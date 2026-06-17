@@ -23,6 +23,8 @@ router.post('/check-in', attendanceController.checkIn);
 router.post('/check-out', attendanceController.checkOut);
 
 router.get('/shifts', attendanceController.getShifts);
+router.post('/shift', attendanceController.createShift);
+router.put('/shift/:id', attendanceController.updateShift);
 
 router.get('/reports/daily', attendanceController.getReportDaily);
 router.get('/reports/monthly', attendanceController.getReportMonthly);

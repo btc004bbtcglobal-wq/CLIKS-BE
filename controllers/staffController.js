@@ -30,14 +30,14 @@ initColumns();
 const staffController = {
     // 1. POST /staff
     createStaff: async (req, res) => {
-        const { name, role, email, phone, salary, status, hire_date, department, designation } = req.body;
+        const { name, role, email, phone, salary, status, hire_date, department, designation, address, emergency_contact, bank_details, shift } = req.body;
         if (!name) return sendError(res, 'Name is required', 400);
 
         try {
             const now = new Date().toISOString();
             const result = await db.prepare(`
-                INSERT INTO employees (user_id, name, role, email, phone, salary, status, hire_date, department, designation, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO employees (user_id, name, role, email, phone, salary, status, hire_date, department, designation, address, emergency_contact, bank_details, shift, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `).run(
                 req.user.id,
                 name,
@@ -49,6 +49,10 @@ const staffController = {
                 hire_date || now.split('T')[0],
                 department || 'Operations',
                 designation || 'Associate',
+                address ? (typeof address === 'object' ? JSON.stringify(address) : address) : null,
+                emergency_contact ? (typeof emergency_contact === 'object' ? JSON.stringify(emergency_contact) : emergency_contact) : null,
+                bank_details ? (typeof bank_details === 'object' ? JSON.stringify(bank_details) : bank_details) : null,
+                shift ? (typeof shift === 'object' ? JSON.stringify(shift) : shift) : null,
                 now,
                 now
             );

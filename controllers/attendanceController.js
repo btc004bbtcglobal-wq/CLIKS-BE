@@ -35,6 +35,17 @@ const initColumns = async () => {
             // Column already exists
         }
     }
+    
+    // Create shifts table if not exists
+    await db.prepare(`CREATE TABLE IF NOT EXISTS shifts (
+        shift_id TEXT PRIMARY KEY,
+        user_id INTEGER,
+        shift_name TEXT,
+        shift_start_time TEXT,
+        shift_end_time TEXT,
+        shift_type TEXT,
+        grace_time INTEGER
+    )`).run();
 };
 initColumns();
 
@@ -303,10 +314,51 @@ const attendanceController = {
         }
     },
     getShifts: async (req, res) => {
-        return sendSuccess(res, [
-            { shift_id: 'SFT-01', shift_name: 'General Day Shift', shift_start_time: '09:00 AM', shift_end_time: '06:00 PM', shift_type: 'Fixed', grace_time: 15 },
-            { shift_id: 'SFT-02', shift_name: 'Night Logistics Shift', shift_start_time: '09:00 PM', shift_end_time: '06:00 AM', shift_type: 'Fixed', grace_time: 15 }
-        ], 'Shifts retrieved successfully');
+        try {
+            const shifts = await db.prepare('SELECT * FROM shifts WHERE user_id = ?').all(req.user.id);
+            if (shifts.length === 0) {
+                const defaults = [
+                    { shift_id: 'SFT-01', shift_name: 'General Day Shift', shift_start_time: '09:00 AM', shift_end_time: '06:00 PM', shift_type: 'Fixed', grace_time: 15 },
+                    { shift_id: 'SFT-02', shift_name: 'Night Logistics Shift', shift_start_time: '09:00 PM', shift_end_time: '06:00 AM', shift_type: 'Fixed', grace_time: 15 }
+                ];
+                for (const d of defaults) {
+                    await db.prepare('INSERT INTO shifts (shift_id, user_id, shift_name, shift_start_time, shift_end_time, shift_type, grace_time) VALUES (?, ?, ?, ?, ?, ?, ?)')
+                      .run(d.shift_id, req.user.id, d.shift_name, d.shift_start_time, d.shift_end_time, d.shift_type, d.grace_time);
+                }
+                return sendSuccess(res, defaults, 'Shifts retrieved successfully');
+            }
+            return sendSuccess(res, shifts, 'Shifts retrieved successfully');
+        } catch (error) {
+            return sendError(res, 'Failed to fetch shifts', 500);
+        }
+    },
+    createShift: async (req, res) => {
+        const { shift_name, shift_start_time, shift_end_time, shift_type, grace_time } = req.body;
+        const shift_id = `SFT-${Date.now().toString().slice(-4)}`;
+        try {
+            await db.prepare(`
+                INSERT INTO shifts (shift_id, user_id, shift_name, shift_start_time, shift_end_time, shift_type, grace_time)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            `).run(shift_id, req.user.id, shift_name, shift_start_time, shift_end_time, shift_type || 'Custom', grace_time || 0);
+            const newShift = await db.prepare('SELECT * FROM shifts WHERE shift_id = ?').get(shift_id);
+            return sendSuccess(res, newShift, 'Shift created successfully');
+        } catch (error) {
+            return sendError(res, 'Failed to create shift', 500);
+        }
+    },
+    updateShift: async (req, res) => {
+        const { id } = req.params;
+        const { shift_name, shift_start_time, shift_end_time, shift_type, grace_time } = req.body;
+        try {
+            await db.prepare(`
+                UPDATE shifts SET shift_name = ?, shift_start_time = ?, shift_end_time = ?, shift_type = ?, grace_time = ?
+                WHERE shift_id = ? AND user_id = ?
+            `).run(shift_name, shift_start_time, shift_end_time, shift_type || 'Custom', grace_time, id, req.user.id);
+            const updated = await db.prepare('SELECT * FROM shifts WHERE shift_id = ?').get(id);
+            return sendSuccess(res, updated, 'Shift updated successfully');
+        } catch (error) {
+            return sendError(res, 'Failed to update shift', 500);
+        }
     },
 
     // Geo-location

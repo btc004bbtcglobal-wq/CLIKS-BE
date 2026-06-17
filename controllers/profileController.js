@@ -6,6 +6,19 @@ const db = require('../db/connection');
 const { sendSuccess, sendError } = require('../utils/response');
 
 // Helper: strip password_hash from user row
+const initColumns = async () => {
+  const columns = [
+    'tier TEXT DEFAULT \'Free Plan\'',
+    'subscription_days_remaining INTEGER DEFAULT 0'
+  ];
+  for (const col of columns) {
+    try {
+      await db.prepare(`ALTER TABLE users ADD COLUMN ${col}`).run();
+    } catch (e) {}
+  }
+};
+initColumns();
+
 const safeUser = (user) => {
   if (!user) return null;
   const { password_hash: _password_hash, ...safe } = user;
